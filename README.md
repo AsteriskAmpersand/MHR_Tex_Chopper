@@ -1,5 +1,7 @@
-<img src="https://cdn.discordapp.com/attachments/606154391405199380/828385308672393216/GossHaragIconFull.fw.png" width="150">
-Monster Hutner Rise Tex Chopper
+<img src="https://cdn.discordapp.com/attachments/606154391405199380/828385308672393216/GossHaragIconFull.fw.png" width="150"> 
+
+# Monster Hunter Rise Tex Chopper  
+
 A Python library and application for converting from MH Rise textures to DDS and back.
 
 ## Credit
