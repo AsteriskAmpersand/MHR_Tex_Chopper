@@ -1,3 +1,10 @@
+# Tests
+tests/
+# Environment
+Scripts/
+scratchpad.py
+*.cfg
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
