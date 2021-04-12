@@ -284,7 +284,6 @@ class TextureData():
         self.size = self.x,self.y       
         _,mtx,mty,_ = formatParse(self.formatName)
         _,tx,ty,_ = formatTexelParse(self.formatName)
-        #mTexelSize = tx,ty
         self.tx,self.ty = tx,ty
         self.texelSize = self.tx,self.ty
         self.mtx,self.mty = mtx,mty
@@ -307,9 +306,6 @@ class TextureData():
     def parselData(self,data):
         miptex = []
         offset = 0
-        #print(self.tx,self.ty)
-        #print(self.texelSize)
-        #print(self.mTexelSize)
         for tex in range(self.imageCount):
             mips = []
             for mip in range(self.mipCount):
@@ -373,9 +369,7 @@ class TextureData():
         if swizzable:
             counts = (self.mipCount<<12) | self.imageCount
         else:
-            print(self.mipCount,self.imageCount)
             counts = (self.imageCount << 8) + self.mipCount
-            print(counts)
         formatting = formatEnum[self.formatName]
         header = {"magic":"TEX", "version":self.version, "width":self.x,"height":self.y,"depth":1,"counts":counts,
              "format":formatting, "swizzleControl":1 if swizzled else -1, "cubemapMarker":self.cubemap*4, "unkn04":(0,0), "NULL0":0,             
@@ -385,7 +379,6 @@ class TextureData():
             header["swizzleData"]={"swizzleHeightDepth":self.sy,"swizzleWidth":self.sx,"NULL1":0,"SEVEN":7 if swizzled else 0, "ONE_1":1 if swizzled else 0}
         else:
             header["swizzleData"] = None
-        #print(len(header["data"]))
         return header
     
 def texHeaderFromDDS(header,data,version = 0x1C):

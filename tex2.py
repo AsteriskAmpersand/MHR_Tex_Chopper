@@ -34,8 +34,6 @@ swizzleData = C.Struct(
         "swizzleDepth" / C.Computed(C.this.swizzleHeightDepth&0xF0>>4),
         "swizzleWidth" / C.Int8ul,
         "NULL1" / C.Int16ul,
-        #[3],
-        #C.Probe(),
         "SEVEN" / C.Const(7,C.Int16ul),
         "ONE_1" / C.Const(1,C.Int16ul),
     )
@@ -46,8 +44,6 @@ swizzleNull = C.Struct(
         "swizzleDepth" / C.Computed(C.this.swizzleHeightDepth&0xF0>>4),
         "swizzleWidth" / C.Int8ul,
         "NULL1" / C.Int16ul,
-        #[3],
-        #C.Probe(),
         "SEVEN" / C.Const(0,C.Int16ul),
         "ONE_1" / C.Const(0,C.Int16ul),
     )
@@ -61,16 +57,13 @@ _TEXHeader = C.Struct(
         "counts" / C.Int16ul,        
         "imageCount" / C.Computed(lambda this: this.counts&0x3FF if this.version in swizzableFormats else this.counts>>8),#C.Int8ul,#12
         "mipCount" / C.Computed(lambda this: (this.counts>>12 if this.version in swizzableFormats else this.counts&0xFF)),#C.Int8ul,#4
-        C.Probe(),
         "format" / C.Int32ul,
         "swizzleControl" / C.Int32sl,#C.Const(1,C.Int32ul),
         "cubemapMarker" / C.Int32ul,
         "unkn04" / C.Int8ul[2],
         "NULL0" /  C.Const(0,C.Int16ul),
         "swizzleData" / C.If(lambda ctx: ctx.version in swizzableFormats,C.IfThenElse(lambda ctx: ctx.version in swizzledFormats,swizzleData,swizzleNull)),
-        #C.Probe(),
         "textureHeaders" / mipData[C.this.mipCount][C.this.imageCount],
-        #C.Probe(),
         "start" /C.Tell,
         "data" / C.GreedyBytes,
     )
@@ -82,15 +75,10 @@ def expandBlockData(texhead,swizzle):
         mips = []
         for mipsTex in image:
             start = mipsTex.mipOffset-texhead.start
-            #print(mipsTex.mipOffset)
             end = start + (mipsTex.compressedSize if swizzle else mipsTex.uncompressedSize)
-            #print(end-start)
-            #print()
             padding = (mipsTex.uncompressedSize - mipsTex.compressedSize) if swizzle else 0
             #assert len(data) == end-start
             mips.append(texhead.data[start:end]+b"\x00"*padding)
-        #print(len(texhead.textureHeaders))
-        print(sum(map(len,mips)))
         texs.append(mips)
     return texs
     
@@ -100,8 +88,8 @@ def trim(data,size,texelSize,superBlockSize):
     bw,bh = texelSize
     linearTexel = linearize(packetSize,data)
     result = b''.join(texel for ix,texel in (filter(lambda ixtexel: ((((ixtexel[0]))*bw) % tw < w) and ((((ixtexel[0]))*bw) // tw < h) ,enumerate(linearTexel))))
-    #if DEBUG:
-    #    print("%d/%d | %d x %d [%d x %d]"%(len(data),len(result),w,h,bw,bh))
+    if DEBUG:
+        print("%d/%d | %d x %d [%d x %d]"%(len(data),len(result),w,h,bw,bh))
     return result
 
 def BCtoDDS(filename,texhead,texelSize,datablocks):
@@ -115,7 +103,6 @@ def BCtoDDS(filename,texhead,texelSize,datablocks):
         trimmedBlocks = [mip for texture in datablocks for mip in texture]
     targetFormat = ddsMHRTypeEnum[reverseFormatEnum[texhead.format].upper()]
     mipCount,imageCount = texhead.mipCount, texhead.imageCount
-    #if DEBUG:mipCount,imageCount = 1,1
     cubemap = texhead.cubemapMarker!=0
     #cubemap = 0
     result = ddsFromTexData(height, width, mipCount, imageCount, targetFormat, cubemap, b''.join(trimmedBlocks))
@@ -129,7 +116,6 @@ def toR8G8B8_UNORM(pixelData):
 
 def ASTCtoDDS(filename,texhead,texelSize,data,f):
     bindata = b""
-    #data = data[:1]
     for tex in data:
         for mip,image in enumerate(tex):
             size = ruD(texhead.width,2**(mip)),ruD(texhead.height,2**(mip))
@@ -141,28 +127,16 @@ def ASTCtoDDS(filename,texhead,texelSize,data,f):
                 tw,th = size
             rgba = astcToPureRGBA(image, tw, th, texelSize[0], texelSize[1], "Srgb" in f)
             binImg = toR8G8B8_UNORM([[column for column in row[:size[0]]] for row in rgba[:size[1]]])
-            #print(size)
-            #print(len(binImg))
             bindata += binImg
     output = Path('.'.join(str(filename).split(".")[:2])).with_suffix(".dds")
     mipCount,imageCount = texhead.mipCount, texhead.imageCount
-    #if DEBUG:mipCount,imageCount = 1,1
     cubemap = texhead.cubemapMarker!=0
-    #cubemap = 0
     result = ddsFromTexData(texhead.height, texhead.width, mipCount, imageCount, "R8G8B8A8UNORM", cubemap,bindata)
     with open(output,"wb") as outf:
         outf.write(result)
     return output
 
 def exportBlocks(filename,texhead,t,f,texelSize,data):
-    #for each image, expand data into a separate file
-    #edit the texhead to be 1 image big
-    #texhead.imageCount = 1
-    #outname = None
-    #for ix,texture in enumerate(data):
-        #if ix!=0:
-        #    rfilename = filename.replace(".tex","_%d.tex"%ix)
-        #else: rfilename = filename
     rfilename = filename
     if "ASTC" in t:
         f = ASTCtoDDS(rfilename,texhead,texelSize,data,f)
@@ -170,7 +144,6 @@ def exportBlocks(filename,texhead,t,f,texelSize,data):
         f = BCtoDDS(rfilename,texhead,texelSize,data)         
     else:
         f = BCtoDDS(rfilename,texhead,texelSize,data)
-        #if ix==0:
     outname = f
     return outname
 
@@ -183,7 +156,6 @@ def mergeStreaming(streamingFile):
                 convertStreaming(baseFile,streamFile,data)
                 data.seek(0)
                 data = data.read()
-        #raise
         base = TEXHeader.parse(data)
         return base
     else:
@@ -206,16 +178,13 @@ def testDeswizzle(block,*args):
 def _convertFromTex(header,filename):
     if DEBUG:
         print("%d x %d x %d | %d/%d"%(header.width,header.height,header.depth,header.mipCount,header.imageCount))
-    #header.mipCount = 1
-    #header.imageCount = 1
     filename = str(filename).replace(".19","").replace(".28","")
     formatString = reverseFormatEnum[header.format]
-    #print(formatString)
     typing,bx,by,formatting = formatTexelParse(formatString)
     datablocks = expandBlockData(header,header.swizzleControl == 1)
     width,height = header.width, header.height
     size = width,height
-    trueSize = size#ruD(width,bx),ruD(height,by)
+    trueSize = size
     texelSize = (bx,by)
     _,mBx,mBy,_ = formatParse(formatString)
     mTexelSize = mBx, mBy
@@ -298,7 +267,7 @@ if __name__ in "__main__":
                     print(w)
                     convertFromTex(w)
     
-    def irregulatTests():
+    def irregularTests():
         REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']
         DMC5 = ['E:/MHR/MHR_Tex_Chopper/tests/wp00_000_albm.tex.11']
         for file in DMC5:
@@ -318,8 +287,8 @@ if __name__ in "__main__":
     #convert(r"E:\MHR\GameFiles\RETool\re_chunk_000\natives\NSW\enemy\em001\00\mod\em001_00_ALBD.tex.28")
     #analyzeMipSize()
     #testTiming()
-    irregulatTests()
-    
+    #irregularTests()
+    runTests()
         #try:
         #    convertFromTex(p)
         #except Exception as e:
