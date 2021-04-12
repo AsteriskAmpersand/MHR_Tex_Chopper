@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import io
 
-from formatEnum import reverseFormatEnum,formatTexelParse,formatParse
+from formatEnum import reverseFormatEnum,formatTexelParse,formatParse, swizzableFormats,swizzledFormats
 from dds import ddsFromTexData,ddsMHRTypeEnum,getBCBPP
 from astc import astcToPureRGBA
 from dds import texHeaderFromDDSFile
@@ -28,45 +28,69 @@ mipData = C.Struct(
         "uncompressedSize" / C.Int32ul,
     )
 
-_TEXHeader = C.Struct(
-        "magic" / C.CString("utf-8"),
-        "version" / C.Int32ul,
-        "width" / C.Int16ul,
-        "height" / C.Int16ul,
-        "depth" / C.Int16ul,
-        "counts" / C.Int16ul,
-        #C.Probe(),
-        "imageCount" / C.Computed(C.this.counts&0x3FF),#C.Int8ul,#12
-        "mipCount" / C.Computed((C.this.counts>>12)),#C.Int8ul,#4
-        "format" / C.Int32ul,
-        "ONE_0" / C.Const(1,C.Int32ul),
-        "cubemapMarker" / C.Int32ul,
-        "unkn04" / C.Int8ul[2],
-        "NULL0" /  C.Const(0,C.Int16ul),
+swizzleData = C.Struct(
         "swizzleHeightDepth" / C.Int8ul,
         "swizzleHeight" / C.Computed(C.this.swizzleHeightDepth&0xF),
         "swizzleDepth" / C.Computed(C.this.swizzleHeightDepth&0xF0>>4),
         "swizzleWidth" / C.Int8ul,
         "NULL1" / C.Int16ul,
         #[3],
+        #C.Probe(),
         "SEVEN" / C.Const(7,C.Int16ul),
         "ONE_1" / C.Const(1,C.Int16ul),
+    )
+
+swizzleNull = C.Struct(
+        "swizzleHeightDepth" / C.Int8ul,
+        "swizzleHeight" / C.Computed(C.this.swizzleHeightDepth&0xF),
+        "swizzleDepth" / C.Computed(C.this.swizzleHeightDepth&0xF0>>4),
+        "swizzleWidth" / C.Int8ul,
+        "NULL1" / C.Int16ul,
+        #[3],
+        #C.Probe(),
+        "SEVEN" / C.Const(0,C.Int16ul),
+        "ONE_1" / C.Const(0,C.Int16ul),
+    )
+
+_TEXHeader = C.Struct(
+        "magic" / C.CString("utf-8"),
+        "version" / C.Int32ul,
+        "width" / C.Int16ul,
+        "height" / C.Int16ul,
+        "depth" / C.Int16ul,
+        "counts" / C.Int16ul,        
+        "imageCount" / C.Computed(lambda this: this.counts&0x3FF if this.version in swizzableFormats else this.counts>>8),#C.Int8ul,#12
+        "mipCount" / C.Computed(lambda this: (this.counts>>12 if this.version in swizzableFormats else this.counts&0xFF)),#C.Int8ul,#4
+        C.Probe(),
+        "format" / C.Int32ul,
+        "swizzleControl" / C.Int32sl,#C.Const(1,C.Int32ul),
+        "cubemapMarker" / C.Int32ul,
+        "unkn04" / C.Int8ul[2],
+        "NULL0" /  C.Const(0,C.Int16ul),
+        "swizzleData" / C.If(lambda ctx: ctx.version in swizzableFormats,C.IfThenElse(lambda ctx: ctx.version in swizzledFormats,swizzleData,swizzleNull)),
         #C.Probe(),
         "textureHeaders" / mipData[C.this.mipCount][C.this.imageCount],
+        #C.Probe(),
         "start" /C.Tell,
         "data" / C.GreedyBytes,
     )
 TEXHeader = _TEXHeader#.compile()
 
-def expandBlockData(texhead):
+def expandBlockData(texhead,swizzle):
     texs = []
     for image in texhead.textureHeaders:
         mips = []
         for mipsTex in image:
             start = mipsTex.mipOffset-texhead.start
-            end = start + mipsTex.compressedSize
-            padding = mipsTex.uncompressedSize - mipsTex.compressedSize
+            #print(mipsTex.mipOffset)
+            end = start + (mipsTex.compressedSize if swizzle else mipsTex.uncompressedSize)
+            #print(end-start)
+            #print()
+            padding = (mipsTex.uncompressedSize - mipsTex.compressedSize) if swizzle else 0
+            #assert len(data) == end-start
             mips.append(texhead.data[start:end]+b"\x00"*padding)
+        #print(len(texhead.textureHeaders))
+        print(sum(map(len,mips)))
         texs.append(mips)
     return texs
     
@@ -84,8 +108,11 @@ def BCtoDDS(filename,texhead,texelSize,datablocks):
     width,height = texhead.width,texhead.height
     size = width,height
     p = lambda x: (x,x)
-    superBlockSize = (2**texhead.swizzleWidth,2**texhead.swizzleHeight)
-    trimmedBlocks = [trim(data,dotDivide(size,p(2**mip)),texelSize,superBlockSize) for texture in datablocks for mip,data in enumerate(texture)]
+    if texhead.swizzleControl == 1:
+        superBlockSize = (2**texhead.swizzleData.swizzleWidth,2**texhead.swizzleData.swizzleHeight)
+        trimmedBlocks = [trim(data,dotDivide(size,p(2**mip)),texelSize,superBlockSize) for texture in datablocks for mip,data in enumerate(texture)]
+    else:
+        trimmedBlocks = [mip for texture in datablocks for mip in texture]
     targetFormat = ddsMHRTypeEnum[reverseFormatEnum[texhead.format].upper()]
     mipCount,imageCount = texhead.mipCount, texhead.imageCount
     #if DEBUG:mipCount,imageCount = 1,1
@@ -105,19 +132,27 @@ def ASTCtoDDS(filename,texhead,texelSize,data,f):
     #data = data[:1]
     for tex in data:
         for mip,image in enumerate(tex):
-            size = texhead.width//2**(mip),texhead.height//2**(mip)
-            superBlockSize = (2**max(texhead.swizzleWidth-mip,0),2**max(texhead.swizzleHeight-mip,0))
-            tw,th = hypersize(size,texelSize,superBlockSize)
+            size = ruD(texhead.width,2**(mip)),ruD(texhead.height,2**(mip))
+            if texhead.swizzleData:
+                superBlockSize = (2**max(texhead.swizzleData.swizzleWidth-mip,0),2**max(texhead.swizzleData.swizzleHeight-mip,0))
+                tw,th = hypersize(size,texelSize,superBlockSize)
+            else:
+                superBlockSize = (1,1)
+                tw,th = size
             rgba = astcToPureRGBA(image, tw, th, texelSize[0], texelSize[1], "Srgb" in f)
-            bindata += toR8G8B8_UNORM([[column for column in row[:size[0]]] for row in rgba[:size[1]]])
+            binImg = toR8G8B8_UNORM([[column for column in row[:size[0]]] for row in rgba[:size[1]]])
+            #print(size)
+            #print(len(binImg))
+            bindata += binImg
     output = Path('.'.join(str(filename).split(".")[:2])).with_suffix(".dds")
     mipCount,imageCount = texhead.mipCount, texhead.imageCount
     #if DEBUG:mipCount,imageCount = 1,1
     cubemap = texhead.cubemapMarker!=0
     #cubemap = 0
-    result = ddsFromTexData(texhead.height, texhead.width, mipCount, imageCount, "R8G8B8A8_UNORM", cubemap,bindata)
+    result = ddsFromTexData(texhead.height, texhead.width, mipCount, imageCount, "R8G8B8A8UNORM", cubemap,bindata)
     with open(output,"wb") as outf:
         outf.write(result)
+    return output
 
 def exportBlocks(filename,texhead,t,f,texelSize,data):
     #for each image, expand data into a separate file
@@ -173,25 +208,28 @@ def _convertFromTex(header,filename):
         print("%d x %d x %d | %d/%d"%(header.width,header.height,header.depth,header.mipCount,header.imageCount))
     #header.mipCount = 1
     #header.imageCount = 1
-    filename = str(filename).replace(".19","")
+    filename = str(filename).replace(".19","").replace(".28","")
     formatString = reverseFormatEnum[header.format]
     #print(formatString)
     typing,bx,by,formatting = formatTexelParse(formatString)
-    datablocks = expandBlockData(header)
+    datablocks = expandBlockData(header,header.swizzleControl == 1)
     width,height = header.width, header.height
     size = width,height
     trueSize = size#ruD(width,bx),ruD(height,by)
     texelSize = (bx,by)
     _,mBx,mBy,_ = formatParse(formatString)
     mTexelSize = mBx, mBy
-    superBlockSize = (2**header.swizzleWidth,2**header.swizzleHeight)
-    plainBlocks = [[deswizzle(block,superBlockSize,texelSize,mTexelSize,trueSize,mip) for mip,block in enumerate(image)] for tix,image in enumerate(datablocks)]
+    if header.swizzleControl == 1:
+        superBlockSize = (2**header.swizzleData.swizzleWidth,2**header.swizzleData.swizzleHeight)
+        plainBlocks = [[deswizzle(block,superBlockSize,texelSize,mTexelSize,trueSize,mip) for mip,block in enumerate(image)] for tix,image in enumerate(datablocks)]
+    else:
+        plainBlocks = datablocks
     return exportBlocks(filename,header,typing,formatting,texelSize,plainBlocks)
         
 convert = convertFromTex
 
-def convertToTex(filename,outf = None):
-    texHeader = texHeaderFromDDSFile(filename)
+def convertToTex(filename,outf = None,salt = 0x1c):
+    texHeader = texHeaderFromDDSFile(filename,salt)
     if outf is None:
         outf = str(filename).replace(".dds",".tex")
     with open(outf,"wb") as tex:
@@ -205,8 +243,8 @@ if __name__ in "__main__":
         testCases = Path(r"E:\MHR\GameFiles\RETool\re_chunk_000").rglob("*.tex")
         for p in testCases:
             header = TEXHeader.parse_file(p)
-            sx=header.swizzleWidth
-            sy=header.swizzleHeight
+            sx=header.swizzleData.swizzleWidth
+            sy=header.swizzleData.swizzleHeight
             #print(2**sx,2**sy)
             #continue
             _,tx,ty,_ = formatParse(reverseFormatEnum[header.format])
@@ -251,21 +289,36 @@ if __name__ in "__main__":
             header = TEXHeader.parse_file(p)
             if header.imageCount == 1:
                 formatting = reverseFormatEnum[header.format]
-                print(formatting)
-                print(p)
-                w = convertFromTex(p)
-                print("Converted From")
-                w = convertToTex(w,str(Path(p.replace(".","_iter.")).with_suffix(".tex")))
-                print(w)
-                convertFromTex(w)
+                if "ASTC" in formatting:
+                    print(formatting)
+                    print(p)
+                    w = convertFromTex(p)
+                    print("Converted From")
+                    w = convertToTex(w,str(Path(p.replace(".","_iter.")).with_suffix(".tex")))
+                    print(w)
+                    convertFromTex(w)
     
+    def irregulatTests():
+        REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']
+        DMC5 = ['E:/MHR/MHR_Tex_Chopper/tests/wp00_000_albm.tex.11']
+        for file in DMC5:
+            print("Forwards")
+            w = convertFromTex(file)
+            print("Backwards")
+            w = convertToTex(w,str(Path(file.replace(".","_iter.")).with_suffix(".tex")),salt = 11)
+            print("Forward Again")
+            convertFromTex(w)
+        for file in REVerse:
+            w = convertFromTex(file)
+            w = convertToTex(w,str(Path(file.replace(".","_iter.")).with_suffix(".tex")),salt = 30)
+            convertFromTex(w)
     from texTest import testCases
     from pathlib import Path
     import traceback
     #convert(r"E:\MHR\GameFiles\RETool\re_chunk_000\natives\NSW\enemy\em001\00\mod\em001_00_ALBD.tex.28")
     #analyzeMipSize()
     #testTiming()
-    runTests()
+    irregulatTests()
     
         #try:
         #    convertFromTex(p)

@@ -6,7 +6,7 @@ Created on Thu Mar 25 21:09:41 2021
 """
 import re
 
-AstcRegex = re.compile("(Astc)([0-9]+)x([0-9]+)(.*)")
+AstcRegex = re.compile("(ASTC)([0-9]+)X([0-9]+)(.*)")
 BCRegex = re.compile("(BC[0-9]+H?)(.*)")
 RGBRegex = re.compile("([RGBAX][0-9]+)?"*5+"(.*)")
 RGBChannel = re.compile("([RGBAX])([0-9]+)")
@@ -70,6 +70,10 @@ def formatTexelParse(formatString):
         ypacketlen = 1
         return (channels,xpacketlen,ypacketlen,rgb.groups()[-1])
     raise ValueError("Unparseable Format Error")
+
+#RE Engine Swizzable formats
+swizzableFormats = [28,30]#MHRise, ResidentEvilReVerse
+swizzledFormats = [28]
 
 formatEnum = {
     "A8Unorm":0x41,

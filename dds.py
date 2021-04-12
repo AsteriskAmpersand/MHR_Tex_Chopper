@@ -6,8 +6,8 @@ Created on Wed Mar 31 03:23:06 2021
 """
 import math
 import construct as C
-from formatEnum import formatEnum,reverseFormatEnum,formatParse,formatTexelParse
-from tex_math import ruD,ulog2,bitCount,hypersize,swizzle,capSuperBlock,packetSize
+from formatEnum import formatEnum,reverseFormatEnum,formatParse,formatTexelParse,swizzableFormats,swizzledFormats
+from tex_math import ruD,ulog2,dotDivide,bitCount,hypersize,swizzle,capSuperBlock,packetSize
 from tex_math import squareWidth,squareHeight,blockWidth,blockHeight
 #dwPixelFlags
 #{
@@ -227,13 +227,13 @@ def ddsFromTexData(h,w,mmc,count,targetFormat,cubemap,data):
     return DDSHeader.build(header)+data
 
 legacyMapping = {
-    DXT1: "BC1_UNORM",
-    DXT2: "BC2_UNORM",
-    DXT3: "BC2_UNORM_SRGB",
-    DXT4: "BC3_UNORM",
-    DXT5: "BC3_UNORM_SRGB",
-    ATI1: "BC4_UNORM",
-    ATI2: "BC5_UNORM",    
+    DXT1: "BC1UNORM",
+    DXT2: "BC2UNORM",
+    DXT3: "BC2UNORM_SRGB",
+    DXT4: "BC3UNORM",
+    DXT5: "BC3UNORM_SRGB",
+    ATI1: "BC4UNORM",
+    ATI2: "BC5UNORM",    
     }
 
 def buildFormatString(header):
@@ -249,7 +249,7 @@ def buildFormatString(header):
         B = (pixelFormat.dwBBitMask,"B","%d"%bitCount(pixelFormat.dwBBitMask))
         A = (pixelFormat.dwABitMask,"A","%d"%bitCount(pixelFormat.dwABitMask))
         RGBA = ''.join(filter(lambda x: x[0],sorted([R,G,B,A])))
-        return RGBA+"_UNORM"
+        return RGBA+"UNORM"
 
 def aggregateSuperBlock(mTexelSize,trueSize):
     x,y = trueSize
@@ -265,13 +265,23 @@ def pad(byteData,texelCounts):
     total = txC*tyC*packetSize
     return byteData + b'\x00'*max(0,total-len(byteData))
 
+def product(listing):
+    cur = 1
+    for element in listing:
+        cur*=element
+    return cur
+
 class TextureData():   
-    def __init__(self,header):
+    def __init__(self,header,version = 0x1C):
         self.mipCount = header.dwMipMapCount
         self.cubemap = (header.ddsCaps[1]&DDSCAPS2_CUBEMAP != 0)*1
+        self.version = version
+        self.swizzable = self.version in swizzableFormats
+        self.swizzled = self.version in swizzledFormats
         self.imageCount = 1 if not header.ddpfPixelFormat.dwFourCC == "DX10" else header.dx10Header.arraySize*(6 if self.cubemap else 1)
         self.formatName = buildFormatString(header)
-        self.x,self.y = header.dwWidth, header.dwHeight        
+        self.x,self.y = header.dwWidth, header.dwHeight 
+        self.size = self.x,self.y       
         _,mtx,mty,_ = formatParse(self.formatName)
         _,tx,ty,_ = formatTexelParse(self.formatName)
         #mTexelSize = tx,ty
@@ -279,8 +289,10 @@ class TextureData():
         self.texelSize = self.tx,self.ty
         self.mtx,self.mty = mtx,mty
         self.mTexelSize = self.mtx,self.mty
-        self.size = self.x,self.y
-        self.sx,self.sy = aggregateSuperBlock(self.texelSize, self.size)
+        if version in swizzledFormats:
+            self.sx,self.sy = aggregateSuperBlock(self.texelSize, self.size)
+        else:
+            self.sx,self.sy = 0,0
         self.superBlockSize = self.sx,self.sy
     
     def expandCount(self,texelCount,mip):
@@ -291,15 +303,19 @@ class TextureData():
         sx,sy = 2**sx,2**sy
         hTW,hTH = sx*squareWidth*blockWidth,sy*squareHeight*blockHeight
         return ruD(txC,hTW)*hTW,ruD(tyC,hTH)*hTH
-        
+    
     def parselData(self,data):
         miptex = []
         offset = 0
+        #print(self.tx,self.ty)
+        #print(self.texelSize)
+        #print(self.mTexelSize)
         for tex in range(self.imageCount):
             mips = []
             for mip in range(self.mipCount):
-                xcount,ycount = ruD(ruD(self.x,2**mip),self.tx),ruD(ruD(self.y,2**mip),self.ty)
-                bytelen = xcount*ycount*packetSize
+                xcount,ycount = ruD(ruD(self.x,2**mip),self.mtx),ruD(ruD(self.y,2**mip),self.mty)
+                mpacketSize = ruD(packetSize,round(product(dotDivide(self.texelSize,self.mTexelSize))))
+                bytelen = xcount*ycount*mpacketSize
                 parsel = (data[offset:offset+bytelen],(xcount,ycount))
                 mips.append(parsel)
                 offset += bytelen
@@ -311,28 +327,40 @@ class TextureData():
 
     def swizzleParsels(self):
         stride = 0x10
-        base = 0x28 + stride*self.imageCount*self.mipCount
+        base = 0x20 + self.swizzable*8 + stride*self.imageCount*self.mipCount
         tex = []
         headers = []
         for texture in self.miptex:
             mips = []
             textureHeaders = []
             for mip,(mipData,texelCount) in enumerate(texture):
-                expandedTexelCount = self.expandCount(texelCount,mip)
-                paddedMip = pad(mipData,expandedTexelCount)
-                sx,sy = self.superBlockSize
-                superBlockSize = 2**sx,2**sy
-                swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
-                compressedSize = len(swizzled)
-                compressedSw = trim(swizzled)
-                uncompressedSize = len(compressedSw)
-                mips.append(swizzled)
-                header = {
-                        "mipOffset":base,
-                        "uncompressedSize":uncompressedSize,
-                        "compressedSize":compressedSize,
-                        }
-                base+=compressedSize
+                if self.version in swizzledFormats:
+                    expandedTexelCount = self.expandCount(texelCount,mip)
+                    paddedMip = pad(mipData,expandedTexelCount)
+                    sx,sy = self.superBlockSize
+                    superBlockSize = 2**sx,2**sy
+                    swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
+                    compressedSize = len(swizzled)
+                    compressedSw = trim(swizzled)
+                    uncompressedSize = len(compressedSw)
+                    mips.append(swizzled)
+                    header = {
+                            "mipOffset":base,
+                            "compressedSize":compressedSize,
+                            "uncompressedSize":uncompressedSize,                        
+                            }
+                    base+=compressedSize
+                else:
+                    uncompressedSize = len(mipData)
+                    tx,ty = texelCount
+                    scanlineSize = tx*packetSize
+                    mips.append(mipData)
+                    header = {
+                            "mipOffset":base,
+                            "uncompressedSize":uncompressedSize,
+                            "compressedSize":scanlineSize,                        
+                            }
+                    base+=uncompressedSize
                 textureHeaders.append(header)
             tex.append(mips)
             headers.append(textureHeaders)
@@ -341,24 +369,33 @@ class TextureData():
         return
     
     def build(self):
-        counts = (self.mipCount<<12) | self.imageCount
+        swizzable,swizzled = self.swizzable,self.swizzled
+        if swizzable:
+            counts = (self.mipCount<<12) | self.imageCount
+        else:
+            print(self.mipCount,self.imageCount)
+            counts = (self.imageCount << 8) + self.mipCount
+            print(counts)
         formatting = formatEnum[self.formatName]
-        header = {"magic":"TEX", "version":0x1C, "width":self.x,"height":self.y,"depth":1,"counts":counts,
-             "format":formatting, "ONE_0":1, "cubemapMarker":self.cubemap*4, "unkn04":(0,0), "NULL0":0,
-             "swizzleHeightDepth":self.sy,"swizzleWidth":self.sx,"NULL1":0,"SEVEN":7,
-             "ONE_1":1,"textureHeaders":self.headers}
+        header = {"magic":"TEX", "version":self.version, "width":self.x,"height":self.y,"depth":1,"counts":counts,
+             "format":formatting, "swizzleControl":1 if swizzled else -1, "cubemapMarker":self.cubemap*4, "unkn04":(0,0), "NULL0":0,             
+             "textureHeaders":self.headers}
         header["data"] = b''.join(map(lambda x: b''.join(x),self.swizzledParsels))
-        print(len(header["data"]))
+        if swizzable:
+            header["swizzleData"]={"swizzleHeightDepth":self.sy,"swizzleWidth":self.sx,"NULL1":0,"SEVEN":7 if swizzled else 0, "ONE_1":1 if swizzled else 0}
+        else:
+            header["swizzleData"] = None
+        #print(len(header["data"]))
         return header
     
-def texHeaderFromDDS(header,data):
-    td = TextureData(header)
+def texHeaderFromDDS(header,data,version = 0x1C):
+    td = TextureData(header,version)
     return td.parselData(data)
 
-def texHeaderFromDDSFile(filename):
+def texHeaderFromDDSFile(filename,salt):
     with open(filename,"rb") as inf:
         header = DDSHeader.parse_stream(inf)
         data = inf.read()
-        return texHeaderFromDDS(header,data)
+        return texHeaderFromDDS(header,data,salt)
     #missing swizzling
         
