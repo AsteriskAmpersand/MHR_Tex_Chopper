@@ -5,6 +5,7 @@ Created on Thu Apr  8 22:07:22 2021
 @author: AsteriskAmpersand
 """
 import math
+from itertools import zip_longest
 
 DEBUG = False
 if __name__ in "__main__":
@@ -73,6 +74,10 @@ class Container():
         return result 
 
 def capSuperBlock(superBlockSize,mTexelSize,trueSize,mip):
+    if DEBUG:
+        print("TxM: %s"%str((superBlockSize,mTexelSize,trueSize,mip)))
+    if mip == 0:
+        return superBlockSize
     x,y = trueSize
     sX,sY = superBlockSize
     #print(sX,sY) #shrink based on max dimension or min it's one or the other
@@ -93,8 +98,7 @@ def generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip=0
                       subclass=Square)
     
     sX,sY = superBlockSize#dotDivide(superBlockSize,(2**mip,2**mip))
-    if mip > 0:
-        sX,sY = capSuperBlock(superBlockSize,mTexelSize,trueSize,mip)
+    sX,sY = capSuperBlock(superBlockSize,mTexelSize,trueSize,mip)
     superblockWidth = sX
     superblockHeight = sY
     Superblock = Container(direction=Y,width=superblockWidth,height=superblockHeight,
@@ -108,13 +112,27 @@ def generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip=0
     Texture = Container(direction=X,width = superblockWCount,height=superblockHCount,
                         subclass=Superblock)
     if DEBUG:
-        print("%d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
-              (*trueSize,texelWidth,texelHeight,4*texelWidth,8*texelHeight,sX*4*texelWidth,sY*8*texelHeight,
+        print("TxM: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
+              (*trueSize,sX,sY,texelWidth,texelHeight,4*texelWidth,8*texelHeight,sX*4*texelWidth,sY*8*texelHeight,
                superblockPixelWidth,superblockPixelHeight,
-               sX*4*texelWidth*superblockWCount,sY*8*texelHeight*superblockHCount))
+               sX*4*texelWidth*superblockWCount,sY*8*texelHeight*superblockHCount)))
     return Texture.indexize()
 
 packetSize = 16
+def extendedZip(linearTexel,pattern):
+    #return zip(linearTexel,pattern)
+    if DEBUG:
+        linearTexel = list(linearTexel)
+        print("TxM: PreJoinBlock "+ str(len(b''.join(linearTexel))))
+        print("TxM: PreJoinBlockTexels "+ str(len(linearTexel)))
+        print("TxM: PreJoinPatternTexels "+ str(len(pattern)))
+        superTexel = list(zip_longest(linearTexel,pattern,fillvalue = b'\x00'*packetSize))
+        flatTexel = b''.join([lt for lt,p in superTexel])
+        print("TxM: ExtensionTexels "+ str(len(superTexel)))
+        print("TxM: FlatExtetnsionLength "+ str(len(flatTexel)))
+        return superTexel
+    return zip_longest(linearTexel,pattern,fillvalue = b'\x00'*packetSize)
+
 linearize = lambda packetSize,data: (data[i*packetSize:(i+1)*packetSize] for i in range(len(data)//packetSize))
 def deswizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):    
     linearTexel = linearize(packetSize,data)
@@ -123,11 +141,11 @@ def deswizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):
     solvedData = sorted((tuple( ryindex + rxindex),texel) 
                for texel,(rxindex,ryindex) in zip(linearTexel,swizzlePattern))
     if DEBUG:
-        print("%d/%d"%(len(data),len(solvedData)*packetSize))
+        #print("TxM: "+ str("%d/%d"%(len(data),len(solvedData)*packetSize)))
         if len(data) != len(solvedData)*packetSize:
-            print()
-            print("[EXCEPTION SIZE ILLEGAL]")
-            print()
+            print("TxM: "+ str())
+            print("TxM: "+ str("[EXCEPTION SIZE ILLEGAL]"))
+            print("TxM: "+ str())
     return b''.join((tex for ix,tex in solvedData))
 
 def swizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):      

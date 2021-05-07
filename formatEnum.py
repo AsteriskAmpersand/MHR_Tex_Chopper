@@ -13,7 +13,7 @@ RGBChannel = re.compile("([RGBAX])([0-9]+)")
 
 def getBCBPP(BC):
     BC = BC.upper()
-    print(BC)
+    #print("FE: "+BC)
     if "BC1" in BC: return 8
     if "BC2" in BC: return 16
     if "BC3" in BC: return 16

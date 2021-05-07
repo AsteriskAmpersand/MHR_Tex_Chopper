@@ -16,7 +16,8 @@ from astc import astcToPureRGBA
 from dds import texHeaderFromDDSFile
 from streaming import convertStreaming
 from tex_math import (ruD,ulog2,bitCount,linearize,dotDivide,hypersize,deswizzle,
-                    squareWidth,squareHeight,blockWidth,blockHeight,packetSize)
+                    squareWidth,squareHeight,blockWidth,blockHeight,packetSize,
+                    capSuperBlock)
 
 DEBUG = False
 if __name__ in "__main__":
@@ -82,29 +83,65 @@ def expandBlockData(texhead,swizzle):
         texs.append(mips)
     return texs
     
-def trim(data,size,texelSize,superBlockSize):    
+def trim(data,size,texelSize,mTexelSize,superBlockSize):   
     w,h = size
-    tw,th = hypersize(size,texelSize,superBlockSize)
+    tw,th = hypersize(size,mTexelSize,superBlockSize)
+    #mbw,mbh = mTexelSize
     bw,bh = texelSize
     linearTexel = linearize(packetSize,data)
-    result = b''.join(texel for ix,texel in (filter(lambda ixtexel: ((((ixtexel[0]))*bw) % tw < w) and ((((ixtexel[0]))*bw) // tw < h) ,enumerate(linearTexel))))
     if DEBUG:
-        print("%d/%d | %d x %d [%d x %d]"%(len(data),len(result),w,h,bw,bh))
+        print("Tx2")
+        print("Tx2 Image XY : "+ str((w,h)))
+        print("Tx2 Hyper XY : "+ str((tw,th)))
+        print("Tx2 DataInLen : "+ str(len(data)))
+        result = b''
+        for ix,texel in enumerate(linearTexel):
+            xix = (ix*bw)% tw
+            yix = (ix*bw)//tw*bh
+            #print(xix,yix)
+            if xix < w and yix < h:
+                result += texel
+    else:
+        result = b''.join(texel for ix,texel in (filter(lambda ixtexel: ((((ixtexel[0]))*bw) % tw < w) and ((((ixtexel[0]))*bw) // tw * bh < h) ,enumerate(linearTexel))))
+    if DEBUG:
+        sX,sY = superBlockSize
+        #print(sX,sY)
+        
+        superblockPixelWidth = sX*2*2*bw
+        superblockPixelHeight = sY*4*2*bh
+        superblockWCount = ruD(tw,superblockPixelWidth)
+        superblockHCount = ruD(th,superblockPixelHeight)    
+        
+        print("Tx2: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
+          (*size,sX,sY,bw,bh,4*bw,8*bh,sX*4*bw,sY*8*bh,
+           *superBlockSize,
+           sX*4*bw*superblockWCount,sY*8*bh*superblockHCount)))
+        print("Tx2 In/Out : %d/%d | %d x %d [%d x %d]"%(len(data),len(result),w,h,bw,bh))
+        print("Tx2 Out/Expected: %d/%d"%(len(result), ruD(w,bw) * ruD(h,bh) * packetSize))
+    assert len(result) == ruD(w,bw) * ruD(h,bh) * packetSize
+        
+    #print("_____")  
     return result
 
-def BCtoDDS(filename,texhead,texelSize,datablocks):
+def BCtoDDS(filename,texhead,texelSize,mTexelSize,datablocks):
     width,height = texhead.width,texhead.height
     size = width,height
     p = lambda x: (x,x)
     if texhead.swizzleControl == 1:
         superBlockSize = (2**texhead.swizzleData.swizzleWidth,2**texhead.swizzleData.swizzleHeight)
-        trimmedBlocks = [trim(data,dotDivide(size,p(2**mip)),texelSize,superBlockSize) for texture in datablocks for mip,data in enumerate(texture)]
+        #if texelSize == (8,4): superBlockSize = dotDivide(superBlockSize,(2,1))
+        trimmedBlocks = [trim(data,dotDivide(size,p(2**mip)),
+                              texelSize,
+                              mTexelSize,
+                              capSuperBlock(superBlockSize,mTexelSize,dotDivide(size,p(2**mip)),mip)) 
+                         for texture in datablocks for mip,data in enumerate(texture)]
     else:
         trimmedBlocks = [mip for texture in datablocks for mip in texture]
     targetFormat = ddsMHRTypeEnum[reverseFormatEnum[texhead.format].upper()]
     mipCount,imageCount = texhead.mipCount, texhead.imageCount
     cubemap = texhead.cubemapMarker!=0
     #cubemap = 0
+    if DEBUG: print("Tx2: "+ str(list(map(len,trimmedBlocks))))
     result = ddsFromTexData(height, width, mipCount, imageCount, targetFormat, cubemap, b''.join(trimmedBlocks))
     output = Path('.'.join(str(filename).split(".")[:2])).with_suffix(".dds")
     with open(output,"wb") as outf:
@@ -114,7 +151,7 @@ def BCtoDDS(filename,texhead,texelSize,datablocks):
 def toR8G8B8_UNORM(pixelData):    
     return b''.join(map(lambda row: b''.join(map(bytes,row)),pixelData))
 
-def ASTCtoDDS(filename,texhead,texelSize,data,f):
+def ASTCtoDDS(filename,texhead,texelSize,mTexelSize,data,f):
     bindata = b""
     for tex in data:
         for mip,image in enumerate(tex):
@@ -136,14 +173,14 @@ def ASTCtoDDS(filename,texhead,texelSize,data,f):
         outf.write(result)
     return output
 
-def exportBlocks(filename,texhead,t,f,texelSize,data):
+def exportBlocks(filename,texhead,t,f,texelSize,mTexelSize,data):
     rfilename = filename
     if "ASTC" in t:
-        f = ASTCtoDDS(rfilename,texhead,texelSize,data,f)
+        f = ASTCtoDDS(rfilename,texhead,texelSize,mTexelSize,data,f)
     elif "BC" in t:
-        f = BCtoDDS(rfilename,texhead,texelSize,data)         
+        f = BCtoDDS(rfilename,texhead,texelSize,mTexelSize,data)         
     else:
-        f = BCtoDDS(rfilename,texhead,texelSize,data)
+        f = BCtoDDS(rfilename,texhead,texelSize,mTexelSize,data)
     outname = f
     return outname
 
@@ -177,7 +214,7 @@ def testDeswizzle(block,*args):
 
 def _convertFromTex(header,filename):
     if DEBUG:
-        print("%d x %d x %d | %d/%d"%(header.width,header.height,header.depth,header.mipCount,header.imageCount))
+        print("Tx2: "+ str("%d x %d x %d | %d/%d"%(header.width,header.height,header.depth,header.mipCount,header.imageCount)))
     filename = str(filename).replace(".19","").replace(".28","")
     formatString = reverseFormatEnum[header.format]
     typing,bx,by,formatting = formatTexelParse(formatString)
@@ -193,7 +230,7 @@ def _convertFromTex(header,filename):
         plainBlocks = [[deswizzle(block,superBlockSize,texelSize,mTexelSize,trueSize,mip) for mip,block in enumerate(image)] for tix,image in enumerate(datablocks)]
     else:
         plainBlocks = datablocks
-    return exportBlocks(filename,header,typing,formatting,texelSize,plainBlocks)
+    return exportBlocks(filename,header,typing,formatting,texelSize,mTexelSize,plainBlocks)
         
 convert = convertFromTex
 
@@ -223,12 +260,12 @@ if __name__ in "__main__":
             if (sx,sy) not in mipsw[(x,y)]: mipsw[(x,y)][(sx,sy)] = set()
             mipsw[(x,y)][(sx,sy)].add(reverseFormatEnum[header.format])
             if header.swizzleDepth != 0:
-                print("%d x %d (x %d) -> %d x %d (x %d): %s"%
-                      (x,y,header.depth,sx,sy,header.swizzleDepth,str(p)) )
+                print("RT: "+str("%d x %d (x %d) -> %d x %d (x %d): %s"%
+                      (x,y,header.depth,sx,sy,header.swizzleDepth,str(p)) ))
         for x,y in sorted(mipsw):
-            print("%d x %d:"%(x,y))
+            print("RT: "+str("%d x %d:"%(x,y)))
             for sx,sy in mipsw[(x,y)]:
-                print("    %d x %d: %s"%(sx,sy,', '.join(mipsw[(x,y)][(sx,sy)])))
+                print("RT: "+str("    %d x %d: %s"%(sx,sy,', '.join(mipsw[(x,y)][(sx,sy)]))))
     
     def testTiming():
         import time
@@ -246,26 +283,27 @@ if __name__ in "__main__":
                 sub+=elapsed_astc
                 k+=1
         elapsed = time.time() - start_time
-        print("%s seconds for %d textures at %s sec/tex" % (elapsed,len(testCases),elapsed/len(testCases)))
-        print("%s seconds for %d non astc textures at %s sec/tex" % (elapsed-sub,len(testCases)-k,
-                                                            (elapsed-sub)/(len(testCases)-k)))
-        print("%s seconds for %d astc textures at %s sec/tex" % (sub,k,sub/k))
+        print("RT: "+str("%s seconds for %d textures at %s sec/tex" % (elapsed,len(testCases),elapsed/len(testCases))))
+        print("RT: "+str("%s seconds for %d non astc textures at %s sec/tex" % (elapsed-sub,len(testCases)-k,
+                                                            (elapsed-sub)/(len(testCases)-k))))
+        print("RT: "+str("%s seconds for %d astc textures at %s sec/tex" % (sub,k,sub/k)))
     
    
     def runTests():
-        #testCases = [r"E:\MHR\MHR_Tex_Chopper\tests\BlueNoise16x16.tex"]
+        #testCases = [r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"]
         for p in testCases:
             header = TEXHeader.parse_file(p)
             if header.imageCount == 1:
                 formatting = reverseFormatEnum[header.format]
-                if "ASTC" in formatting:
-                    print(formatting)
-                    print(p)
+                if "BC" in formatting:
+                    print("RT: "+str(formatting))
+                    print("RT: "+str(p))
                     w = convertFromTex(p)
-                    print("Converted From")
+                    print("RT: "+str("Converted From"))
                     w = convertToTex(w,str(Path(p.replace(".","_iter.")).with_suffix(".tex")))
-                    print(w)
+                    print("RT: "+str(w))
                     convertFromTex(w)
+                    print("RT: "+str())
     
     def irregularTests():
         REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']

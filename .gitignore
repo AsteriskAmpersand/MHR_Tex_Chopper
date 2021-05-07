@@ -1,7 +1,9 @@
 # Mass Compilation
 _main_*
 # Tests
+test/
 tests/
+TexTests/
 # Environment
 Scripts/
 scratchpad.py
