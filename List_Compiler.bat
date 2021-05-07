@@ -1,4 +1,4 @@
-cd /d E:\MHR\MHR_Tex_Chopper
+cd /d C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper
 .\Scripts\activate
 PyInstaller main.spec
 PyInstaller _main_ResidentEvil7.spec

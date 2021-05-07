@@ -336,9 +336,9 @@ class TextureData():
                     sx,sy = self.superBlockSize
                     superBlockSize = 2**sx,2**sy
                     swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
-                    compressedSize = len(swizzled)
+                    uncompressedSize = len(swizzled)
                     compressedSw = trim(swizzled)
-                    uncompressedSize = len(compressedSw)
+                    compressedSize = len(compressedSw)
                     mips.append(swizzled)
                     header = {
                             "mipOffset":base,
