@@ -28,7 +28,7 @@ The exe versions are drag and drop. Download the exe appropiate to your intended
 - construct
 
 ### Compilation
-Setup a virtual environment on the project folder and install the dependencies. Construct can be installed through `pip install construct`, however astc_decomp (if you want to compile a light weight version that doesn't require the entirety of PIL) needs to be installed from the modified wheel provided in the repo through `pip install astc_decomp-1.0.3-cp37-cp37m-win_amd64.whl`.
+Setup a virtual environment on the project folder and install the dependencies. Construct can be installed through `pip install construct`, however astc_decomp (if you want to compile a light weight version that doesn't require the entirety of PIL) needs to be installed from the modified wheel provided in the repo through `pip install astc_decomp-1.0.3-cp37-cp37m-win_amd64.whl`. If this wheel is not compatible, unzip the astc-decomp-clean.zip file and recompile it into a wheel suitable to your operating system and install said wheel.
 
 The mainFactory.py file generates PyInstaller spec files, main.py files and the List_Compiler.bat. This file in turn generates the distributable executables for every game supported game version. The mainFactory builds this files based on main.py and main.spec. main.spec requires changing the path to the project to the correct location.
 
