@@ -251,11 +251,12 @@ def buildFormatString(header):
         RGBA = ''.join(filter(lambda x: x[0],sorted([R,G,B,A])))
         return RGBA+"UNORM"
 
-def aggregateSuperBlock(mTexelSize,trueSize):
+def aggregateSuperBlock(texelSize,trueSize):
     x,y = trueSize
-    tx,ty = mTexelSize
+    tx,ty = texelSize
     dx,dy = ulog2(ruD(x,tx)*tx),ulog2(ruD(y,ty)*ty)
-    return min(0,max(dx-3,0)),min(4,max(dy-3,0))
+    print("DDS: x,y: %d,%d, tx,ty: %d,%d, dx,dy: %d,%d"%(x,y,tx,ty,dx,dy))
+    return min(4,max(dx-3,0)),min(4,max(dy-3,0))
 
 def trim(binarydata):
     return binarydata.rstrip(b"\x00")
@@ -331,15 +332,16 @@ class TextureData():
             textureHeaders = []
             for mip,(mipData,texelCount) in enumerate(texture):
                 if self.version in swizzledFormats:
-                    expandedTexelCount = self.expandCount(texelCount,mip)
-                    paddedMip = pad(mipData,expandedTexelCount)
+                    #expandedTexelCount = self.expandCount(texelCount,mip)
+                    paddedMip = mipData#pad(mipData,expandedTexelCount)
                     sx,sy = self.superBlockSize
                     superBlockSize = 2**sx,2**sy
+                    
                     swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
                     uncompressedSize = len(swizzled)
                     compressedSw = trim(swizzled)
                     compressedSize = len(compressedSw)
-                    mips.append(swizzled)
+                    mips.append(compressedSw)
                     header = {
                             "mipOffset":base,
                             "compressedSize":compressedSize,

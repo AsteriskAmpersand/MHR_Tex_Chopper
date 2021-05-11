@@ -21,7 +21,7 @@ from tex_math import (ruD,ulog2,bitCount,linearize,dotDivide,hypersize,deswizzle
 
 DEBUG = False
 if __name__ in "__main__":
-    DEBUG = False
+    DEBUG = True
 
 mipData = C.Struct(
         "mipOffset" / C.Int64ul,
@@ -83,9 +83,9 @@ def expandBlockData(texhead,swizzle):
         texs.append(mips)
     return texs
     
-def trim(data,size,texelSize,mTexelSize,superBlockSize):   
+def trim(data,size,texelSize,mTexelSize,superBlockSize):  
     w,h = size
-    tw,th = hypersize(size,mTexelSize,superBlockSize)
+    tw,th = hypersize(size,texelSize,superBlockSize)
     #mbw,mbh = mTexelSize
     bw,bh = texelSize
     linearTexel = linearize(packetSize,data)
@@ -98,7 +98,7 @@ def trim(data,size,texelSize,mTexelSize,superBlockSize):
         for ix,texel in enumerate(linearTexel):
             xix = (ix*bw)% tw
             yix = (ix*bw)//tw*bh
-            #print(xix,yix)
+            #print(xix,yix,texel)
             if xix < w and yix < h:
                 result += texel
     else:
@@ -290,20 +290,26 @@ if __name__ in "__main__":
     
    
     def runTests():
-        #testCases = [r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"]
+        #testCases = [r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
+                     #r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
+        #             ]
         for p in testCases:
             header = TEXHeader.parse_file(p)
-            if header.imageCount == 1:
+            if header.imageCount == 1 and header.depth == 1:
                 formatting = reverseFormatEnum[header.format]
-                if "BC" in formatting:
+                if "ASTC" in formatting:
                     print("RT: "+str(formatting))
                     print("RT: "+str(p))
+                    print()
                     w = convertFromTex(p)
                     print("RT: "+str("Converted From"))
+                    print()
                     w = convertToTex(w,str(Path(p.replace(".","_iter.")).with_suffix(".tex")))
                     print("RT: "+str(w))
+                    print()
                     convertFromTex(w)
-                    print("RT: "+str())
+                    print()
+                    print()
     
     def irregularTests():
         REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']

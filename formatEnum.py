@@ -70,6 +70,8 @@ def formatTexelParse(formatString):
         ypacketlen = 1
         return (channels,xpacketlen,ypacketlen,rgb.groups()[-1])
     raise ValueError("Unparseable Format Error")
+    
+packetTexelparse = formatTexelParse
 
 #RE Engine Swizzable formats
 swizzableFormats = [28,30]#MHRise, ResidentEvilReVerse

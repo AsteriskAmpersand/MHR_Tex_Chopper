@@ -7,9 +7,7 @@ Created on Thu Apr  8 22:07:22 2021
 import math
 from itertools import zip_longest
 
-DEBUG = False
-if __name__ in "__main__":
-    DEBUG = False
+DEBUG = True
 
 def bitCount(int32):
     return sum(((int32 >> i) & 1 for i in range(32)))
@@ -74,16 +72,20 @@ class Container():
         return result 
 
 def capSuperBlock(superBlockSize,mTexelSize,trueSize,mip):
-    if DEBUG:
-        print("TxM: %s"%str((superBlockSize,mTexelSize,trueSize,mip)))
     if mip == 0:
         return superBlockSize
+    else:
+        return _capSuperBlock(superBlockSize,mTexelSize,trueSize,mip)
+
+def _capSuperBlock(superBlockSize,mTexelSize,trueSize,mip):
     x,y = trueSize
     sX,sY = superBlockSize
     #print(sX,sY) #shrink based on max dimension or min it's one or the other
     sx,sy = ulog2(sX),ulog2(sY)
     tx,ty = mTexelSize
     dx,dy = ulog2(ruD(x,tx)),ulog2(ruD(y,ty))    
+    if DEBUG:
+        print("TxM: (sBS,mTs,s,mip,dxdy) %s"%str((superBlockSize,mTexelSize,trueSize,mip,dx,dy)))
     return 2**min(sx,max(dx-3,0)),2**min(sy,max(dy-3,0))
 
 #In multi image contextt, the size of the first image buffer is used as minimum for the following ones data
@@ -139,7 +141,7 @@ def deswizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):
     swizzlePattern = generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip)
     
     solvedData = sorted((tuple( ryindex + rxindex),texel) 
-               for texel,(rxindex,ryindex) in zip(linearTexel,swizzlePattern))
+               for texel,(rxindex,ryindex) in extendedZip(linearTexel,swizzlePattern))
     if DEBUG:
         #print("TxM: "+ str("%d/%d"%(len(data),len(solvedData)*packetSize)))
         if len(data) != len(solvedData)*packetSize:
@@ -149,7 +151,19 @@ def deswizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):
     return b''.join((tex for ix,tex in solvedData))
 
 def swizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):      
+    if DEBUG: print("TxM >>: ==================================================")
     linearTexel = linearize(packetSize,data)
     swizzlePattern = generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip)
+    #print(swizzlePattern)
     swizzledEnum = sorted([(ry+rx,ix) for ix,(rx,ry) in enumerate(swizzlePattern)])
-    return b''.join((tex for ix,tex in sorted(((ix,texel) for texel,(yx,ix) in zip(linearTexel,swizzledEnum)))))
+    if DEBUG:
+        linearTexel = list(linearTexel)
+        sizzlePattern = list(swizzlePattern)
+        llt = len(linearTexel)
+        lsp = len(swizzlePattern)
+        print("TxM >>: LinearTexel/SwizzleCount "+ str("%d/%d"%(llt,lsp)))
+        if llt > lsp:
+            pass
+            #raise
+    if DEBUG: print("TxM >>: ==================================================")
+    return b''.join((tex for ix,tex in sorted(((ix,texel) for texel,(yx,ix) in extendedZip(linearTexel,swizzledEnum)))))
