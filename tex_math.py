@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-Created on Thu Apr  8 22:07:22 2021
+Created on Mon May 10 17:12:51 2021
 
-@author: AsteriskAmpersand
+@author: Asterisk
 """
+
 import math
-from itertools import zip_longest
 from debugging import DEBUG
+packetSize = 16
+
 
 def bitCount(int32):
     return sum(((int32 >> i) & 1 for i in range(32)))
@@ -16,153 +18,140 @@ def ulog2(x):
 
 ruD = lambda x,y: (x+y-1)//y
 
-squareWidth = 2
-squareHeight = 2
-blockWidth = 2
-blockHeight = 4
-
-def hypersize(size,texelSize,superBlockSize):
-    w,h = size
-    sW,sH = superBlockSize
-    texelWidth,texelHeight = texelSize
-    trueWidth,trueHeight = size#trueSize 
-    superblockWCount = ruD(trueWidth,sW*blockWidth*squareWidth*texelWidth)
-    superblockHCount = ruD(trueHeight,sH*blockHeight*squareHeight*texelHeight)  
-    tw,th = sW*4*texelWidth*superblockWCount,sH*8*texelHeight*superblockHCount
-    return tw,th
-
-
 def dotDivide(vec1,vec2):
     return tuple([ruD(vl,vr) for vl,vr in zip(vec1,vec2)])
 
-X = 0
-Y = 1
-
-class Container():
-    subclass = None
-    width = None
-    height = None
-    def __init__(self,direction,width=None,height=None,subclass=None):
-        self.direction = direction
-        if width: self.width = width
-        if height: self.height = height
-        if subclass: self.subclass = subclass
-        elif self.subclass: 
-            self.subclass = self.subclass()
-        
-    def indexize(self):
-        result = []
-        if self.direction == X:
-            for y in range(self.height):
-                for x in range(self.width):
-                    if self.subclass:
-                        childrenBlock = self.subclass.indexize()
-                        result += [([x]+xt, [y]+yt)  for xt,yt in childrenBlock]
-                    else:
-                        result.append(([x],[y]))
-        elif self.direction == Y:            
-            for x in range(self.width):
-                for y in range(self.height):
-                    if self.subclass:
-                        childrenBlock = self.subclass.indexize()
-                        result += [([x]+xt, [y]+yt)  for xt,yt in childrenBlock]
-                    else:
-                        result.append(([x],[y]))
-        return result 
-
-def capSuperBlock(superBlockSize,mTexelSize,trueSize,mip):
-    if mip == 0:
-        return superBlockSize
-    else:
-        return _capSuperBlock(superBlockSize,mTexelSize,trueSize,mip)
-
-def _capSuperBlock(superBlockSize,mTexelSize,trueSize,mip):
-    x,y = trueSize
-    sX,sY = superBlockSize
-    #print(sX,sY) #shrink based on max dimension or min it's one or the other
-    sx,sy = ulog2(sX),ulog2(sY)
-    tx,ty = mTexelSize
-    dx,dy = ulog2(ruD(x,tx)),ulog2(ruD(y,ty))    
-    if DEBUG:
-        print("TxM: (sBS,mTs,s,mip,dxdy) %s"%str((superBlockSize,mTexelSize,trueSize,mip,dx,dy)))
-    return 2**min(sx,max(dx-3,0)),2**min(sy,max(dy-3,0))
-
-#In multi image contextt, the size of the first image buffer is used as minimum for the following ones data
-def generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip=0):
-    
-    trueSize=dotDivide(trueSize,(2**mip,2**mip))
-    trueWidth,trueHeight = trueSize    
-    
-    #mipF = lambda x: ruD(x,2**mip)
-    Square = Container(direction=Y,width=squareWidth,height=squareHeight)
-    Block = Container(direction=Y,width=blockWidth,height=blockHeight,
-                      subclass=Square)
-    
-    sX,sY = superBlockSize#dotDivide(superBlockSize,(2**mip,2**mip))
-    sX,sY = capSuperBlock(superBlockSize,mTexelSize,trueSize,mip)
-    superblockWidth = sX
-    superblockHeight = sY
-    Superblock = Container(direction=Y,width=superblockWidth,height=superblockHeight,
-                      subclass=Block)
-    
-    texelWidth,texelHeight = texelSize
-    superblockPixelWidth = superblockWidth*blockWidth*squareWidth*texelWidth
-    superblockPixelHeight = superblockHeight*blockHeight*squareHeight*texelHeight
-    superblockWCount = ruD(trueWidth,superblockPixelWidth)
-    superblockHCount = ruD(trueHeight,superblockPixelHeight)    
-    Texture = Container(direction=X,width = superblockWCount,height=superblockHCount,
-                        subclass=Superblock)
-    if DEBUG:
-        print("TxM: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
-              (*trueSize,ulog2(sX),ulog2(sY),texelWidth,texelHeight,4*texelWidth,8*texelHeight,sX*4*texelWidth,sY*8*texelHeight,
-               superblockPixelWidth,superblockPixelHeight,
-               sX*4*texelWidth*superblockWCount,sY*8*texelHeight*superblockHCount)))
-    return Texture.indexize()
-
-packetSize = 16
-def extendedZip(linearTexel,pattern):
-    #return zip(linearTexel,pattern)
-    if DEBUG:
-        linearTexel = list(linearTexel)
-        print("TxM: PreJoinBlock "+ str(len(b''.join(linearTexel))))
-        print("TxM: PreJoinBlockTexels "+ str(len(linearTexel)))
-        print("TxM: PreJoinPatternTexels "+ str(len(pattern)))
-        superTexel = list(zip_longest(linearTexel,pattern,fillvalue = b'\x00'*packetSize))
-        flatTexel = b''.join([lt for lt,p in superTexel])
-        print("TxM: ExtensionTexels "+ str(len(superTexel)))
-        print("TxM: FlatExtetnsionLength "+ str(len(flatTexel)))
-        return superTexel
-    return zip_longest(linearTexel,pattern,fillvalue = b'\x00'*packetSize)
+def getSwizzleSizes(size,packetTexelSize):
+    w,h = size
+    tw,th = packetTexelSize
+    dx,dy = ulog2(ruD(w,tw)),ulog2(ruD(h,th))
+    return max(0,min(4,dx-3)),max(0,min(4,dy-3))
 
 linearize = lambda packetSize,data: (data[i*packetSize:(i+1)*packetSize] for i in range(len(data)//packetSize))
-def deswizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):    
-    linearTexel = linearize(packetSize,data)
-    swizzlePattern = generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip)
-    
-    solvedData = sorted((tuple( ryindex + rxindex),texel) 
-               for texel,(rxindex,ryindex) in extendedZip(linearTexel,swizzlePattern))
-    if DEBUG:
-        #print("TxM: "+ str("%d/%d"%(len(data),len(solvedData)*packetSize)))
-        if len(data) != len(solvedData)*packetSize:
-            print("TxM: "+ str())
-            print("TxM: "+ str("[EXCEPTION SIZE ILLEGAL]"))
-            print("TxM: "+ str())
-    return b''.join((tex for ix,tex in solvedData))
 
-def swizzle(data,superBlockSize,texelSize,mTexelSize,trueSize,mip=0):      
-    if DEBUG: print("TxM >>: ==================================================")
-    linearTexel = linearize(packetSize,data)
-    swizzlePattern = generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip)
-    #print(swizzlePattern)
-    swizzledEnum = sorted([(ry+rx,ix) for ix,(rx,ry) in enumerate(swizzlePattern)])
-    if DEBUG:
-        linearTexel = list(linearTexel)
-        sizzlePattern = list(swizzlePattern)
-        llt = len(linearTexel)
-        lsp = len(swizzlePattern)
-        print("TxM >>: LinearTexel/SwizzleCount "+ str("%d/%d"%(llt,lsp)))
-        if llt > lsp:
-            pass
-            #raise
-    if DEBUG: print("TxM >>: ==================================================")
-    return b''.join((tex for ix,tex in sorted(((ix,texel) for texel,(yx,ix) in extendedZip(linearTexel,swizzledEnum)))))
+class CoordinateMapping():
+    squareWidth = 2
+    squareHeight = 2
+    blockWidth = 2
+    blockHeight = 4
+
+    def __init__(self,size,packetTexelSize,swizzleSize):
+        w,h = size
+        tw,th = packetTexelSize
+        self.wcount, self.hcount = (ruD(w,tw),ruD(h,th))
+        self.finalw, self.finalh = size
+        self.width, self.height = self.wcount*tw, self.hcount*th
+        self.tw, self.th = packetTexelSize
+        self.sw, self.sh = swizzleSize
+        self._x,self._y = 0,0
+        
+        self.superblockWidth, self.superblockHeight = 2**self.sw, 2**self.sh
+        
+        self._CoSqWCum, self._CoSqHCum = self.squareWidth, self.squareHeight
+        self._CoSqArea = self._CoSqWCum*self._CoSqHCum
+        
+        self._CoBWCum, self._CoBHCum = self._CoSqWCum*self.blockWidth, self._CoSqHCum*self.blockHeight
+        self._CoBArea = self._CoBWCum*self._CoBHCum
+        
+        self._CoSuWCum, self._CoSuHCum = self._CoBWCum*self.superblockWidth, self._CoBHCum*self.superblockHeight
+        self._CoSuArea = self._CoSuWCum*self._CoSuHCum
+        
+        self.hyperWCount, self.hyperHCount = ruD(self.wcount,self._CoSuWCum),ruD(self.hcount,self._CoSuHCum)
+        self.hyperW, self.hyperH = self.hyperWCount*self._CoSuWCum,self.hyperHCount*self._CoSuHCum
+        
+        if DEBUG:
+            print("TxM2: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
+                               (self.finalw,self.finalh,self.sw,self.sh,self.tw,self.th,
+                               self.tw*self._CoBWCum,self.th*self._CoBHCum,
+                               self.tw*self._CoSuWCum,self.th*self._CoSuHCum,
+                               self._CoSuWCum*self.tw,self._CoSuHCum*self.th,
+                               self.hyperW*self.tw,self.hyperH*self.th)))
+        
+    def mapToOffset(self,x,y,error = False):
+        #superblocks stack on x, for the length of the image hyperdimensions
+        #blocks stack on y, for the length of the superblock
+        #squares stack on y, for the length of the block
+        #texel stack on y, for the length of the square
+        superblockX, superblockY = x // self._CoSuWCum, y  // self._CoSuHCum
+        
+        sbX, sbY = x % self._CoSuWCum, y  % self._CoSuHCum
+        blockX, blockY = sbX // self._CoBWCum, sbY // self._CoBHCum
+        
+        bX, bY = sbX % self._CoBWCum, sbY % self._CoBHCum
+        squareX, squareY = bX // self._CoSqWCum, bY // self._CoSqHCum
+        
+        lX,lY = bX % self._CoSqWCum, bY % self._CoSqHCum
+        
+        offset = superblockY*self._CoSuArea*self.hyperWCount + superblockX*self._CoSuArea +\
+                blockX*self._CoBArea*self.superblockHeight + blockY*self._CoBArea +\
+                squareX*self._CoSqArea*self.blockHeight +  squareY*self._CoSqArea +\
+                lX*self.squareHeight + lY
+        if error:
+            print((lX,bX,sbX,superblockX),(lY,bY,sbY,superblockY))
+        return offset
+    
+    def nextToOffset(self,deswizzle = True):
+        if self._y >= self.hcount: return -1
+        value = self.mapToOffset(self._x,self._y)
+        if DEBUG:
+            self._px = self._x
+            self._py = self._y
+        self._x, self._y = (self._x+1)%self.wcount, self._y + ((self._x+1)>=self.wcount)
+        return value
+    
+    def swizzlingPatternGenerator(self):
+        self._x,self._y = 0,0
+        offset = self.nextToOffset()
+        while(offset != -1):            
+            yield offset
+            offset = self.nextToOffset()
+    
+    def deswizzle(self,imageData):
+        data = list(linearize(packetSize,imageData))
+        generator = self.swizzlingPatternGenerator()
+        if DEBUG: print([data[next(generator)] for g in range(1)])
+        generator = self.swizzlingPatternGenerator()
+        self.image = b''.join((data[offset] for offset in generator))
+        if DEBUG: print("TxM2: Image Byte Len %X"%len(self.image))
+        return self.image
+
+    def swizzle(self,imageData):
+        output = [b'\x00'*packetSize for _ in range(self.hyperW*self.hyperH)]
+        if DEBUG:
+            print("TxM2: Input Packet Count: %d Output Packet Count: %d Output Length: %d"%(len(imageData)/packetSize,len(output),len(output)*packetSize))
+        data = linearize(packetSize,imageData)
+        generator = self.swizzlingPatternGenerator()
+        for datum,offset in zip(data,generator):
+            try:
+                output[offset] = datum
+            except:
+                if DEBUG:
+                    print (self._px,self._py)
+                    print(offset)
+                    self.mapToOffset(self._px,self._py,error = True)
+                raise
+        self.image = b''.join(output)
+        return self.image
+                
+    def dimensions(self):
+        """returns Intended Dimensions, True Dimensions, Hyper Dimensions"""
+        return (self.finalw,self.finalh), (self.width,self.height), (self.hyperW,self.hyperH)
+
+def deswizzle(imageData,size,packetTexelSize,swizzleSize,mip):
+    if mip:
+        size = dotDivide(size,(2**mip,2**mip))
+        sx,sy = getSwizzleSizes(size,packetTexelSize)
+        swizzleSize = min(sx,swizzleSize[0]),min(sy,swizzleSize[1])
+    cm = CoordinateMapping(size,packetTexelSize,swizzleSize)
+    image = cm.deswizzle(imageData)
+    intendedSize,trueSize,_ = cm.dimensions()
+    #if DEBUG: return intendedSize,trueSize,imageData,packetTexelSize
+    return intendedSize,trueSize,image,packetTexelSize
+    
+if __name__ in "__main__":
+    x,y = 13,11 #In sq,bl,sb,hb coordinates (1,0,1,1) (1,1,1,0) 
+    off = 3*2*2*16 + 4*8 + 7
+    cm = CoordinateMapping((16,16),(1,1),(1,1))
+    assert cm.mapToOffset(x, y) == off
+        
+    

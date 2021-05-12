@@ -7,7 +7,7 @@ Created on Sun Apr 11 00:15:01 2021
 
 import sys
 from pathlib import Path
-from tex2 import convertFromTex, convertToTex
+from tex import convertFromTex, convertToTex
 
 VERSION = 0x1C
 

@@ -15,9 +15,10 @@ from dds import ddsFromTexData,ddsMHRTypeEnum,getBCBPP
 from astc import astcToPureRGBA
 from dds import texHeaderFromDDSFile
 from streaming import convertStreaming
-from tex_math import (ruD,ulog2,bitCount,linearize,dotDivide,hypersize,deswizzle,
-                    squareWidth,squareHeight,blockWidth,blockHeight,packetSize,
-                    capSuperBlock)
+#from tex_math import (ruD,ulog2,bitCount,linearize,dotDivide,hypersize,#deswizzle,
+#                    squareWidth,squareHeight,blockWidth,blockHeight,packetSize,
+#                    capSuperBlock)
+from tex_math import deswizzle,ruD,packetSize,ulog2
 from debugging import DEBUG
 
 mipData = C.Struct(
@@ -75,64 +76,37 @@ def expandBlockData(texhead,swizzle):
             start = mipsTex.mipOffset-texhead.start
             end = start + (mipsTex.compressedSize if swizzle else mipsTex.uncompressedSize)
             padding = (mipsTex.uncompressedSize - mipsTex.compressedSize) if swizzle else 0
-            print("Tx2: Input Packet Count: %d | Input Length: %d"%(mipsTex.uncompressedSize/packetSize,mipsTex.uncompressedSize))
+            if DEBUG: 
+                pass
+                #print("Tx2: Input Packet Count: %d | Input Length: %d"%(mipsTex.uncompressedSize/packetSize,mipsTex.uncompressedSize))
             #assert len(data) == end-start
             mips.append(texhead.data[start:end]+b"\x00"*padding)
+            if DEBUG: print("Tx2: %X %X"%(start,end))
         texs.append(mips)
     return texs
     
-def trim(data,size,texelSize,mTexelSize,superBlockSize):  
-    w,h = size
-    tw,th = hypersize(size,texelSize,superBlockSize)
-    #mbw,mbh = mTexelSize
-    bw,bh = texelSize
-    linearTexel = linearize(packetSize,data)
-    if DEBUG:
-        print("Tx2")
-        print("Tx2 Image XY : "+ str((w,h)))
-        print("Tx2 Hyper XY : "+ str((tw,th)))
-        print("Tx2 DataInLen : "+ str(len(data)))
-        result = b''
-        for ix,texel in enumerate(linearTexel):
-            xix = (ix*bw)% tw
-            yix = (ix*bw)//tw*bh
-            #print(xix,yix,texel)
-            if xix < w and yix < h:
-                result += texel
-    else:
-        result = b''.join(texel for ix,texel in (filter(lambda ixtexel: ((((ixtexel[0]))*bw) % tw < w) and ((((ixtexel[0]))*bw) // tw * bh < h) ,enumerate(linearTexel))))
-    if DEBUG:
-        sX,sY = superBlockSize
-        #print(sX,sY)
-        
-        superblockPixelWidth = sX*2*2*bw
-        superblockPixelHeight = sY*4*2*bh
-        superblockWCount = ruD(tw,superblockPixelWidth)
-        superblockHCount = ruD(th,superblockPixelHeight)    
-        
-        print("Tx2: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
-          (*size,ulog2(sX),ulog2(sY),bw,bh,4*bw,8*bh,sX*4*bw,sY*8*bh,
-           sX*4*bw,sY*8*bh,
-           sX*4*bw*superblockWCount,sY*8*bh*superblockHCount)))
-        print("Tx2 In/Out : %d/%d | %d x %d [%d x %d]"%(len(data),len(result),w,h,bw,bh))
-        print("Tx2 Out/Expected: %d/%d"%(len(result), ruD(w,bw) * ruD(h,bh) * packetSize))
-    assert len(result) == ruD(w,bw) * ruD(h,bh) * packetSize
-        
+def trim(data,blockSize):
+    bx,by = blockSize
+    targetSize,currentSize,texture,packetTexelSize = data
+    tx,ty = packetTexelSize
+    
+    finalx,finaly = targetSize
+    currentx,currenty = currentSize
+    if currentx == finalx and currenty == finaly:
+        if DEBUG: print("Tx2: %X"%len(texture))
+        return texture
+    currentBlocksX,currentBlocksY = ruD(currentx,bx),ruD(currenty,by)
+    targetBlocksX,targetBlocksY = ruD(finalx,bx),ruD(finaly,by)
+    bppX = (bx * packetSize)//tx
+    offset = lambda x,y: y * currentBlocksX * bppX + x * bppX
+    result = b''.join((texture[offset(0,y):offset(targetBlocksX,y)] for y in range(targetBlocksY)))
     #print("_____")  
     return result
 
-def BCtoDDS(filename,texhead,texelSize,mTexelSize,datablocks):
+def BCtoDDS(filename,texhead,blockSize,datablocks):
     width,height = texhead.width,texhead.height
-    size = width,height
-    p = lambda x: (x,x)
     if texhead.swizzleControl == 1:
-        superBlockSize = (2**texhead.swizzleData.swizzleWidth,2**texhead.swizzleData.swizzleHeight)
-        #if texelSize == (8,4): superBlockSize = dotDivide(superBlockSize,(2,1))
-        trimmedBlocks = [trim(data,dotDivide(size,p(2**mip)),
-                              texelSize,
-                              mTexelSize,
-                              capSuperBlock(superBlockSize,mTexelSize,dotDivide(size,p(2**mip)),mip)) 
-                         for texture in datablocks for mip,data in enumerate(texture)]
+        trimmedBlocks = [trim(miplevel,blockSize) for texture in datablocks for miplevel in texture]
     else:
         trimmedBlocks = [mip for texture in datablocks for mip in texture]
     targetFormat = ddsMHRTypeEnum[reverseFormatEnum[texhead.format].upper()]
@@ -149,19 +123,12 @@ def BCtoDDS(filename,texhead,texelSize,mTexelSize,datablocks):
 def toR8G8B8_UNORM(pixelData):    
     return b''.join(map(lambda row: b''.join(map(bytes,row)),pixelData))
 
-def ASTCtoDDS(filename,texhead,texelSize,mTexelSize,data,f):
+def ASTCtoDDS(filename,texhead,blockSize,data,f):
     bindata = b""
     for tex in data:
-        for mip,image in enumerate(tex):
-            size = ruD(texhead.width,2**(mip)),ruD(texhead.height,2**(mip))
-            if texhead.swizzleData:
-                superBlockSize = (2**max(texhead.swizzleData.swizzleWidth-mip,0),2**max(texhead.swizzleData.swizzleHeight-mip,0))
-                tw,th = hypersize(size,texelSize,superBlockSize)
-            else:
-                superBlockSize = (1,1)
-                tw,th = size
-            rgba = astcToPureRGBA(image, tw, th, texelSize[0], texelSize[1], "Srgb" in f)
-            binImg = toR8G8B8_UNORM([[column for column in row[:size[0]]] for row in rgba[:size[1]]])
+        for targetSize,currentSize,texture,packetTexelSize in tex:        
+            rgba = astcToPureRGBA(texture, *currentSize, *blockSize, "Srgb" in f)
+            binImg = toR8G8B8_UNORM([[column for column in row[:targetSize[0]]] for row in rgba[:targetSize[1]]])
             bindata += binImg
     output = Path('.'.join(str(filename).split(".")[:2])).with_suffix(".dds")
     mipCount,imageCount = texhead.mipCount, texhead.imageCount
@@ -171,14 +138,14 @@ def ASTCtoDDS(filename,texhead,texelSize,mTexelSize,data,f):
         outf.write(result)
     return output
 
-def exportBlocks(filename,texhead,t,f,texelSize,mTexelSize,data):
+def exportBlocks(filename,texhead,blockSize,t,f,data):
     rfilename = filename
     if "ASTC" in t:
-        f = ASTCtoDDS(rfilename,texhead,texelSize,mTexelSize,data,f)
+        f = ASTCtoDDS(rfilename,texhead,blockSize,data,f)
     elif "BC" in t:
-        f = BCtoDDS(rfilename,texhead,texelSize,mTexelSize,data)         
+        f = BCtoDDS(rfilename,texhead,blockSize,data)         
     else:
-        f = BCtoDDS(rfilename,texhead,texelSize,mTexelSize,data)
+        f = BCtoDDS(rfilename,texhead,blockSize,data)
     outname = f
     return outname
 
@@ -206,29 +173,27 @@ def convertFromTex(filename):
         header = mergeStreaming(str(filename))
     return _convertFromTex(header,filename)
 
-from tex_math import swizzle
-def testDeswizzle(block,*args):
-    return deswizzle(swizzle(deswizzle(block,*args),*args),*args)
+#from tex_math import swizzle
+#def testDeswizzle(block,*args):
+#    return deswizzle(swizzle(deswizzle(block,*args),*args),*args)
 
 def _convertFromTex(header,filename):
     if DEBUG:
         print("Tx2: "+ str("%d x %d x %d | %d/%d"%(header.width,header.height,header.depth,header.mipCount,header.imageCount)))
     filename = str(filename).replace(".19","").replace(".28","")
     formatString = reverseFormatEnum[header.format]
+    _,blockSizeX,blockSizeY,_ = formatParse(formatString)
     typing,bx,by,formatting = formatTexelParse(formatString)
     datablocks = expandBlockData(header,header.swizzleControl == 1)
     width,height = header.width, header.height
     size = width,height
-    trueSize = size
-    texelSize = (bx,by)
-    _,mBx,mBy,_ = formatParse(formatString)
-    mTexelSize = mBx, mBy
+    packetTexelSize = (bx,by)
     if header.swizzleControl == 1:
-        superBlockSize = (2**header.swizzleData.swizzleWidth,2**header.swizzleData.swizzleHeight)
-        plainBlocks = [[deswizzle(block,superBlockSize,texelSize,mTexelSize,trueSize,mip) for mip,block in enumerate(image)] for tix,image in enumerate(datablocks)]
+        swizzleSize = (header.swizzleData.swizzleWidth,header.swizzleData.swizzleHeight)        
+        plainBlocks = [[deswizzle(block,size,packetTexelSize,swizzleSize,mip) for mip,block in enumerate(image)] for tix,image in enumerate(datablocks)]
     else:
         plainBlocks = datablocks
-    return exportBlocks(filename,header,typing,formatting,texelSize,mTexelSize,plainBlocks)
+    return exportBlocks(filename,header,(blockSizeX,blockSizeY),typing,formatting,plainBlocks)
         
 convert = convertFromTex
 
@@ -270,12 +235,13 @@ if __name__ in "__main__":
         sub = 0
         k = 0
         start_time = time.time()
-        testCases = Path(r"E:\MHR\GameFiles\RETool\re_chunk_000").rglob("*.tex")
+        #testCases = Path(r"E:\MHR\GameFiles\RETool\re_chunk_000").rglob("*.tex")
+        
         for p in testCases:
             astc_time  = time.time()
             header = TEXHeader.parse_file(p)
             formatting = reverseFormatEnum[header.format]
-            #convertFromTex(p)
+            convertFromTex(p)
             elapsed_astc = time.time()-astc_time
             if "ASTC" in formatting:
                 sub+=elapsed_astc
@@ -288,14 +254,15 @@ if __name__ in "__main__":
     
    
     def runTests():
-        testCases = [r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
-                     r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
-                     ]
+        #testCases = [ r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\TexTests\m03_ki48_ALP.tex",
+        #             r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
+        #             r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
+        #             ]
         for p in testCases:
             header = TEXHeader.parse_file(p)
             if header.imageCount == 1 and header.depth == 1:
                 formatting = reverseFormatEnum[header.format]
-                if "NULL" not in formatting:
+                if True: #"ASTC" not in formatting and header.mipCount > 1:
                     print("RT: "+str(formatting))
                     print("RT: "+str(p))
                     print()
@@ -328,9 +295,9 @@ if __name__ in "__main__":
     import traceback
     #convert(r"E:\MHR\GameFiles\RETool\re_chunk_000\natives\NSW\enemy\em001\00\mod\em001_00_ALBD.tex.28")
     #analyzeMipSize()
-    #testTiming()
+    testTiming()
     #irregularTests()
-    runTests()
+    #runTests()
         #try:
         #    convertFromTex(p)
         #except Exception as e:

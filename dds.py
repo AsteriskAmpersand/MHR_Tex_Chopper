@@ -8,10 +8,8 @@ import math
 import construct as C
 from formatEnum import formatEnum,reverseFormatEnum,formatParse,formatTexelParse
 from formatEnum import packetTexelparse,swizzableFormats,swizzledFormats
-from tex_math import ruD,ulog2,dotDivide,bitCount,hypersize,swizzle,capSuperBlock,packetSize
-from tex_math import squareWidth,squareHeight,blockWidth,blockHeight
-
-from tex_math2 import CoordinateMapping, getSwizzleSizes
+from tex_math import (CoordinateMapping, getSwizzleSizes,
+                       bitCount,ulog2,ruD,packetSize,dotDivide)
 #dwPixelFlags
 #{
 DDPF_ALPHAPIXELS = 0x1
@@ -264,11 +262,6 @@ def aggregateSuperBlock(texelSize,trueSize):
 def trim(binarydata):
     return binarydata.rstrip(b"\x00")
 
-def pad(byteData,texelCounts):
-    txC,tyC = texelCounts
-    total = txC*tyC*packetSize
-    return byteData + b'\x00'*max(0,total-len(byteData))
-
 def product(listing):
     cur = 1
     for element in listing:
@@ -299,15 +292,6 @@ class TextureData():
         else:
             self.sx,self.sy = 0,0
         self.superBlockSize = self.sx,self.sy
-    
-    def expandCount(self,texelCount,mip):
-        txC,tyC = texelCount
-        dx,dy = ulog2(txC),ulog2(tyC)    
-        if mip: sx,sy = min(4,max(dx-3,0)),min(0,max(dy-3,0))
-        else: sx,sy = self.sx,self.sy
-        sx,sy = 2**sx,2**sy
-        hTW,hTH = sx*squareWidth*blockWidth,sy*squareHeight*blockHeight
-        return ruD(txC,hTW)*hTW,ruD(tyC,hTH)*hTH
     
     def parselData(self,data):
         miptex = []

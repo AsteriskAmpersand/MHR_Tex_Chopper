@@ -6,7 +6,7 @@ Created on Mon Apr  5 11:46:20 2021
 """
 import sys
 from pathlib import Path
-from tex2 import convertFromTex, convertToTex
+from tex import convertFromTex, convertToTex
 
 def main():
     for path in sys.argv[1:]:
