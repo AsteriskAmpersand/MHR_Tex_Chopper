@@ -6,9 +6,12 @@ Created on Wed Mar 31 03:23:06 2021
 """
 import math
 import construct as C
-from formatEnum import formatEnum,reverseFormatEnum,formatParse,formatTexelParse,swizzableFormats,swizzledFormats
+from formatEnum import formatEnum,reverseFormatEnum,formatParse,formatTexelParse
+from formatEnum import packetTexelparse,swizzableFormats,swizzledFormats
 from tex_math import ruD,ulog2,dotDivide,bitCount,hypersize,swizzle,capSuperBlock,packetSize
 from tex_math import squareWidth,squareHeight,blockWidth,blockHeight
+
+from tex_math2 import CoordinateMapping, getSwizzleSizes
 #dwPixelFlags
 #{
 DDPF_ALPHAPIXELS = 0x1
@@ -285,12 +288,14 @@ class TextureData():
         self.size = self.x,self.y       
         _,mtx,mty,_ = formatParse(self.formatName)
         _,tx,ty,_ = formatTexelParse(self.formatName)
+        _,ptx,pty,_ = packetTexelparse(self.formatName)
         self.tx,self.ty = tx,ty
         self.texelSize = self.tx,self.ty
         self.mtx,self.mty = mtx,mty
         self.mTexelSize = self.mtx,self.mty
+        self.packetTexelSize = ptx,pty
         if version in swizzledFormats:
-            self.sx,self.sy = aggregateSuperBlock(self.texelSize, self.size)
+            self.sx,self.sy = 0,getSwizzleSizes(self.size,self.packetTexelSize)[1]
         else:
             self.sx,self.sy = 0,0
         self.superBlockSize = self.sx,self.sy
@@ -332,12 +337,12 @@ class TextureData():
             textureHeaders = []
             for mip,(mipData,texelCount) in enumerate(texture):
                 if self.version in swizzledFormats:
-                    #expandedTexelCount = self.expandCount(texelCount,mip)
-                    paddedMip = mipData#pad(mipData,expandedTexelCount)
-                    sx,sy = self.superBlockSize
-                    superBlockSize = 2**sx,2**sy
-                    
-                    swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
+                    size = dotDivide(self.size,(2**mip,2**mip))
+                    _,sy = getSwizzleSizes(size,self.packetTexelSize)
+                    swizzleSizes = (0,sy)
+                    cm = CoordinateMapping(size, self.packetTexelSize, swizzleSizes)
+                    swizzled = cm.swizzle(mipData)
+                    #swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
                     uncompressedSize = len(swizzled)
                     compressedSw = trim(swizzled)
                     compressedSize = len(compressedSw)

@@ -6,7 +6,7 @@ Created on Mon May 10 17:12:51 2021
 """
 
 import math
-
+from debugging import DEBUG
 packetSize = 16
 
 def ulog2(x):
@@ -40,37 +40,47 @@ class CoordinateMapping():
         
         self.superblockWidth, self.superblockHeight = 2**self.sw, 2**self.sh
         
-        self.CoSqWCum, self.CoSqHCum = self.squareWidth, self.squareHeight
-        self.CoSqArea = self.CoSqWCum*self.CoSqHCum
+        self._CoSqWCum, self._CoSqHCum = self.squareWidth, self.squareHeight
+        self._CoSqArea = self._CoSqWCum*self._CoSqHCum
         
-        self.CoBWCum, self.CoBHCum = self.CoSqWCum*self.blockWidth, self.CoSqHCum*self.blockHeight
-        self.CoBArea = self.CoBWCum*self.CoBHCum
+        self._CoBWCum, self._CoBHCum = self._CoSqWCum*self.blockWidth, self._CoSqHCum*self.blockHeight
+        self._CoBArea = self._CoBWCum*self._CoBHCum
         
-        self.CoSuWCum, self.CoSuHCum = self.CoBWCum*self.superblockWidth, self.CoBHCum*self.superblockHeight
-        self.CoSuArea = self.CoSuWCum*self.CoSuHCum
+        self._CoSuWCum, self._CoSuHCum = self._CoBWCum*self.superblockWidth, self._CoBHCum*self.superblockHeight
+        self._CoSuArea = self._CoSuWCum*self._CoSuHCum
         
-        self.hyperWCount, self.hyperHCount = ruD(self.w,self.CoSuWCum),ruD(self.h,self.CoSuHCum)
-        self.hyperW, self.hyperH = self.hyperWCount*self.CoSuWCum,self.hyperHCount*self.CoSuHCum
+        self.hyperWCount, self.hyperHCount = ruD(self.wcount,self._CoSuWCum),ruD(self.hcount,self._CoSuHCum)
+        self.hyperW, self.hyperH = self.hyperWCount*self._CoSuWCum,self.hyperHCount*self._CoSuHCum
         
-    def mapToOffset(self,x,y):
+        if DEBUG:
+            print("TxM2: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
+                               (self.finalw,self.finalh,self.sw,self.sh,self.tw,self.th,
+                               self.tw*self._CoBWCum,self.th*self._CoBHCum,
+                               self.tw*self._CoSuWCum,self.th*self._CoSuHCum,
+                               self._CoSuWCum*self.tw,self._CoSuHCum*self.th,
+                               self.hyperW*self.tw,self.hyperH*self.th)))
+        
+    def mapToOffset(self,x,y,error = False):
         #superblocks stack on x, for the length of the image hyperdimensions
         #blocks stack on y, for the length of the superblock
         #squares stack on y, for the length of the block
         #texel stack on y, for the length of the square
-        superblockX, superblockY = x // self.CoSuWCum, y  // self.CoSuHCum
+        superblockX, superblockY = x // self._CoSuWCum, y  // self._CoSuHCum
         
-        sbX, sbY = x % self.CoSuWCum, y  % self.CoSuHCum
-        blockX, blockY = sbX // self.CoBWCum, sbY // self.CoBHCum
+        sbX, sbY = x % self._CoSuWCum, y  % self._CoSuHCum
+        blockX, blockY = sbX // self._CoBWCum, sbY // self._CoBHCum
         
-        bX, bY = sbX % self.CoBWCum, sbY % self.CoBHCum
-        squareX, squareY = bX // self.CoSqWCum, bY // self.CoSqHCum
+        bX, bY = sbX % self._CoBWCum, sbY % self._CoBHCum
+        squareX, squareY = bX // self._CoSqWCum, bY // self._CoSqHCum
         
-        lX,lY = bX % self.CoSqWCum, bY % self.CoSqHCum
+        lX,lY = bX % self._CoSqWCum, bY % self._CoSqHCum
         
-        offset = superblockY*self.CoSuArea*self.hyperWCount + superblockX*self.CoSuArea +\
-                blockX*self.CoBArea*self.superblockHeight + blockY*self.CoBArea +\
-                squareX*self.CoSqArea*self.blockHeight +  squareY*self.CoSqArea +\
+        offset = superblockY*self._CoSuArea*self.hyperWCount + superblockX*self._CoSuArea +\
+                blockX*self._CoBArea*self.superblockHeight + blockY*self._CoBArea +\
+                squareX*self._CoSqArea*self.blockHeight +  squareY*self._CoSqArea +\
                 lX*self.squareHeight + lY
+        if error:
+            print((lX,bX,sbX,superblockX),(lY,bY,sbY,superblockY))
         return offset
     
     def nextToOffset(self,deswizzle = True):
@@ -79,16 +89,19 @@ class CoordinateMapping():
         else:
             if self._y >= self.hyperH: return -1
         value = self.mapToOffset(self._x,self._y)
+        if DEBUG:
+            self._px = self._x
+            self._py = self._y
         if deswizzle:
-            self.x, self.y = (self.x+1)%self.wcount, self.y + ((self.x+1)>=self.wcount)
+            self._x, self._y = (self._x+1)%self.wcount, self._y + ((self._x+1)>=self.wcount)
         else:
-            self.x, self.y = (self.x+1)%self.hyperW, self.y + ((self.x+1)>=self.hyperW)
+            self._x, self._y = (self._x+1)%self.wcount, self._y + ((self._x+1)>=self.wcount)
         return value
     
     def swizzlingPatternGenerator(self):
         offset = 0
         while(offset != -1):
-            offset = self.nextToOffset(deswizzle = True)
+            offset = self.nextToOffset(deswizzle = False)
             yield offset
     
     def deswizzle(self,imageData):
@@ -98,11 +111,19 @@ class CoordinateMapping():
         return self.image
 
     def swizzle(self,imageData):
-        output = [b'/x00'*packetSize for _ in range(self.hyperW*self.hyperH)]
-        data = list(linearize(packetSize,imageData))
+        output = [b'\x00'*packetSize for _ in range(self.hyperW*self.hyperH)]
+        print("TxM2: Input Packet Count: %d Output Packet Count: %d Output Length: %d"%(len(imageData)/packetSize,len(output),len(output)*packetSize))
+        data = linearize(packetSize,imageData)
         generator = self.swizzlingPatternGenerator()
         for datum,offset in zip(data,generator):
-            output[offset] = datum
+            try:
+                output[offset] = datum
+            except:
+                if DEBUG:
+                    print (self._px,self._py)
+                    print(offset)
+                    self.mapToOffset(self._px,self._py,error = True)
+                raise
         self.image = b''.join(output)
         return self.image
                 

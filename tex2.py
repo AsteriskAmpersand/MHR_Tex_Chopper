@@ -18,10 +18,7 @@ from streaming import convertStreaming
 from tex_math import (ruD,ulog2,bitCount,linearize,dotDivide,hypersize,deswizzle,
                     squareWidth,squareHeight,blockWidth,blockHeight,packetSize,
                     capSuperBlock)
-
-DEBUG = False
-if __name__ in "__main__":
-    DEBUG = True
+from debugging import DEBUG
 
 mipData = C.Struct(
         "mipOffset" / C.Int64ul,
@@ -78,6 +75,7 @@ def expandBlockData(texhead,swizzle):
             start = mipsTex.mipOffset-texhead.start
             end = start + (mipsTex.compressedSize if swizzle else mipsTex.uncompressedSize)
             padding = (mipsTex.uncompressedSize - mipsTex.compressedSize) if swizzle else 0
+            print("Tx2: Input Packet Count: %d | Input Length: %d"%(mipsTex.uncompressedSize/packetSize,mipsTex.uncompressedSize))
             #assert len(data) == end-start
             mips.append(texhead.data[start:end]+b"\x00"*padding)
         texs.append(mips)
@@ -113,8 +111,8 @@ def trim(data,size,texelSize,mTexelSize,superBlockSize):
         superblockHCount = ruD(th,superblockPixelHeight)    
         
         print("Tx2: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
-          (*size,sX,sY,bw,bh,4*bw,8*bh,sX*4*bw,sY*8*bh,
-           *superBlockSize,
+          (*size,ulog2(sX),ulog2(sY),bw,bh,4*bw,8*bh,sX*4*bw,sY*8*bh,
+           sX*4*bw,sY*8*bh,
            sX*4*bw*superblockWCount,sY*8*bh*superblockHCount)))
         print("Tx2 In/Out : %d/%d | %d x %d [%d x %d]"%(len(data),len(result),w,h,bw,bh))
         print("Tx2 Out/Expected: %d/%d"%(len(result), ruD(w,bw) * ruD(h,bh) * packetSize))
@@ -290,14 +288,14 @@ if __name__ in "__main__":
     
    
     def runTests():
-        #testCases = [r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
-                     #r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
-        #             ]
+        testCases = [r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
+                     r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
+                     ]
         for p in testCases:
             header = TEXHeader.parse_file(p)
             if header.imageCount == 1 and header.depth == 1:
                 formatting = reverseFormatEnum[header.format]
-                if "ASTC" in formatting:
+                if "NULL" not in formatting:
                     print("RT: "+str(formatting))
                     print("RT: "+str(p))
                     print()
@@ -309,7 +307,7 @@ if __name__ in "__main__":
                     print()
                     convertFromTex(w)
                     print()
-                    print()
+                    print("==================================")
     
     def irregularTests():
         REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']

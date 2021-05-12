@@ -6,8 +6,7 @@ Created on Thu Apr  8 22:07:22 2021
 """
 import math
 from itertools import zip_longest
-
-DEBUG = True
+from debugging import DEBUG
 
 def bitCount(int32):
     return sum(((int32 >> i) & 1 for i in range(32)))
@@ -115,7 +114,7 @@ def generateSwizzlingPatttern(superBlockSize,texelSize,mTexelSize,trueSize,mip=0
                         subclass=Superblock)
     if DEBUG:
         print("TxM: "+ str("%d x %d | SuperBlockCoeff: %d x %d | Texel: %d x %d | SquareBlock %d x %d | SuperBlock %d x %d | HyperBlock (%d,%d) %d x %d"%
-              (*trueSize,sX,sY,texelWidth,texelHeight,4*texelWidth,8*texelHeight,sX*4*texelWidth,sY*8*texelHeight,
+              (*trueSize,ulog2(sX),ulog2(sY),texelWidth,texelHeight,4*texelWidth,8*texelHeight,sX*4*texelWidth,sY*8*texelHeight,
                superblockPixelWidth,superblockPixelHeight,
                sX*4*texelWidth*superblockWCount,sY*8*texelHeight*superblockHCount)))
     return Texture.indexize()
