@@ -164,7 +164,7 @@ def mergeStreaming(streamingFile):
         raise ValueError("Cannot decode Streaming texture without headers on chunk.")
 
 def convertFromTex(filename):
-    if "streaming" not in str(filename):        
+    if True:#"streaming" not in str(filename):        
         filename = Path(filename)
         if not filename.exists():
             filename = filename.with_suffix(".tex.28")
@@ -254,10 +254,10 @@ if __name__ in "__main__":
     
    
     def runTests():
-        #testCases = [ r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\TexTests\m03_ki48_ALP.tex",
-        #             r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
-        #             r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
-        #             ]
+        testCases = [ r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\boss_icon_mini_IAM.tex",
+                     r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\npc001_00_body_ALBD.tex",
+                     r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\S_Swd050_ALBD.tex",
+                    ]
         for p in testCases:
             header = TEXHeader.parse_file(p)
             if header.imageCount == 1 and header.depth == 1:
@@ -295,9 +295,9 @@ if __name__ in "__main__":
     import traceback
     #convert(r"E:\MHR\GameFiles\RETool\re_chunk_000\natives\NSW\enemy\em001\00\mod\em001_00_ALBD.tex.28")
     #analyzeMipSize()
-    testTiming()
+    #testTiming()
     #irregularTests()
-    #runTests()
+    runTests()
         #try:
         #    convertFromTex(p)
         #except Exception as e:
