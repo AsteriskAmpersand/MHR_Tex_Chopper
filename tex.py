@@ -164,7 +164,7 @@ def mergeStreaming(streamingFile):
         raise ValueError("Cannot decode Streaming texture without headers on chunk.")
 
 def convertFromTex(filename):
-    if True:#"streaming" not in str(filename):
+    if True:#"streaming" not in str(filename):       
         filename = Path(filename)
         if not filename.exists():
             filename = filename.with_suffix(".tex.28")
@@ -297,7 +297,7 @@ if __name__ in "__main__":
     #analyzeMipSize()
     #testTiming()
     #irregularTests()
-    #runTests()
+    runTests()
         #try:
         #    convertFromTex(p)
         #except Exception as e:
