@@ -164,7 +164,7 @@ def mergeStreaming(streamingFile):
         raise ValueError("Cannot decode Streaming texture without headers on chunk.")
 
 def convertFromTex(filename):
-    if True:#"streaming" not in str(filename):       
+    if True:#"streaming" not in str(filename):
         filename = Path(filename)
         if not filename.exists():
             filename = filename.with_suffix(".tex.28")
@@ -205,102 +205,3 @@ def convertToTex(filename,outf = None,salt = 0x1c):
         binaryFile = TEXHeader.build(texHeader)
         tex.write(binaryFile)
     return outf
-"""
-if __name__ in "__main__":
-    def analyzeMipSize():
-        mipsw = {}
-        testCases = Path(r"E:\MHR\GameFiles\RETool\re_chunk_000").rglob("*.tex")
-        for p in testCases:
-            header = TEXHeader.parse_file(p)
-            sx=header.swizzleData.swizzleWidth
-            sy=header.swizzleData.swizzleHeight
-            #print(2**sx,2**sy)
-            #continue
-            _,tx,ty,_ = formatParse(reverseFormatEnum[header.format])
-            x=ulog2(ruD(header.width,tx))
-            y=ulog2(ruD(header.height,ty))
-            if (x,y) not in mipsw:mipsw[(x,y)] = {}
-            if (sx,sy) not in mipsw[(x,y)]: mipsw[(x,y)][(sx,sy)] = set()
-            mipsw[(x,y)][(sx,sy)].add(reverseFormatEnum[header.format])
-            if header.swizzleDepth != 0:
-                print("RT: "+str("%d x %d (x %d) -> %d x %d (x %d): %s"%
-                      (x,y,header.depth,sx,sy,header.swizzleDepth,str(p)) ))
-        for x,y in sorted(mipsw):
-            print("RT: "+str("%d x %d:"%(x,y)))
-            for sx,sy in mipsw[(x,y)]:
-                print("RT: "+str("    %d x %d: %s"%(sx,sy,', '.join(mipsw[(x,y)][(sx,sy)]))))
-
-    def testTiming():
-        import time
-        sub = 0
-        k = 0
-        start_time = time.time()
-        #testCases = Path(r"E:\MHR\GameFiles\RETool\re_chunk_000").rglob("*.tex")
-
-        for p in testCases:
-            astc_time  = time.time()
-            header = TEXHeader.parse_file(p)
-            formatting = reverseFormatEnum[header.format]
-            convertFromTex(p)
-            elapsed_astc = time.time()-astc_time
-            if "ASTC" in formatting:
-                sub+=elapsed_astc
-                k+=1
-        elapsed = time.time() - start_time
-        print("RT: "+str("%s seconds for %d textures at %s sec/tex" % (elapsed,len(testCases),elapsed/len(testCases))))
-        print("RT: "+str("%s seconds for %d non astc textures at %s sec/tex" % (elapsed-sub,len(testCases)-k,
-                                                            (elapsed-sub)/(len(testCases)-k))))
-        print("RT: "+str("%s seconds for %d astc textures at %s sec/tex" % (sub,k,sub/k)))
-
-
-    def runTests():
-        testCases = [ r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\boss_icon_mini_IAM.tex",
-                     r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\npc001_00_body_ALBD.tex",
-                     r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\S_Swd050_ALBD.tex",
-                    ]
-        for p in testCases:
-            header = TEXHeader.parse_file(p)
-            if header.imageCount == 1 and header.depth == 1:
-                formatting = reverseFormatEnum[header.format]
-                if True: #"ASTC" not in formatting and header.mipCount > 1:
-                    print("RT: "+str(formatting))
-                    print("RT: "+str(p))
-                    print()
-                    w = convertFromTex(p)
-                    print("RT: "+str("Converted From"))
-                    print()
-                    w = convertToTex(w,str(Path(p.replace(".","_iter.")).with_suffix(".tex")))
-                    print("RT: "+str(w))
-                    print()
-                    convertFromTex(w)
-                    print()
-                    print("==================================")
-
-    def irregularTests():
-        REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']
-        DMC5 = ['E:/MHR/MHR_Tex_Chopper/tests/wp00_000_albm.tex.11']
-        for file in DMC5:
-            print("Forwards")
-            w = convertFromTex(file)
-            print("Backwards")
-            w = convertToTex(w,str(Path(file.replace(".","_iter.")).with_suffix(".tex")),salt = 11)
-            print("Forward Again")
-            convertFromTex(w)
-        for file in REVerse:
-            w = convertFromTex(file)
-            w = convertToTex(w,str(Path(file.replace(".","_iter.")).with_suffix(".tex")),salt = 30)
-            convertFromTex(w)
-    from texTest import testCases
-    from pathlib import Path
-    import traceback
-    #convert(r"E:\MHR\GameFiles\RETool\re_chunk_000\natives\NSW\enemy\em001\00\mod\em001_00_ALBD.tex.28")
-    #analyzeMipSize()
-    #testTiming()
-    #irregularTests()
-    runTests()
-        #try:
-        #    convertFromTex(p)
-        #except Exception as e:
-        #    traceback.print_tb(e.__traceback__)
-        #    pass
-"""

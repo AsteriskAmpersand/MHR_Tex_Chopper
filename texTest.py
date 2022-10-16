@@ -514,8 +514,8 @@ natives\NSW\stage\m05\textures\m05_iwa23_ALBA.tex""".split("\n")
 
 # import shutil
 # from pathlib import Path
-# risefolder = Path(r"E:\MHR\GameFiles\RETool\"re_chunk_000")
-# newfolder = Path(r"E:\MHR\MHR_Tex_Chopper\tests")
+# risefolder = Path(r"D:\MHR\GameFiles\RETool\"re_chunk_000")
+# newfolder = Path(r"D:\MHR\MHR_Tex_Chopper\tests")
 # for path in oldTestCases:
 #     path = str(risefolder / path)
 #     newPath = newfolder/(Path(path).stem+".tex")

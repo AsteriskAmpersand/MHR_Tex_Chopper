@@ -20,6 +20,6 @@ def main():
                     convertFromTex(spath)
                 for spath in Path(path).rglob("*.dds"):
                     convertToTex(spath)
-                    
+
 if __name__ in "__main__":
     main()
