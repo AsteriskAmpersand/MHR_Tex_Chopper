@@ -75,7 +75,7 @@ packetTexelparse = formatTexelParse
 
 #RE Engine Swizzable formats
 swizzableFormats = [28,30]#MHRise, ResidentEvilReVerse
-swizzledFormats = [28]
+swizzledFormats = []
 
 formatEnum = {
     "A8Unorm":0x41,

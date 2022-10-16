@@ -66,6 +66,10 @@ DXT4 = "DXT4"#0x34545844
 DXT5 = "DXT5"#0x35545844
 ATI1 = "ATI1"
 ATI2 = "ATI2"
+BC4U = "BC4U"
+BC4S = "BC4S"
+BC5U = "BC5U"
+BC5S = "BC5S"
 DX10 = "DX10"#0x30315844
 CCCC = "CCCC"
 NULL = "\x00\x00\x00\x00"
@@ -227,6 +231,16 @@ def ddsFromTexData(h,w,mmc,count,targetFormat,cubemap,data):
     #print(header)
     return DDSHeader.build(header)+data
 
+"""
+        if (MAKEFOURCC('A', 'T', 'I', '1') == ddpf.fourCC) return DXGI_FORMAT_BC4_UNORM;
+        if (MAKEFOURCC('B', 'C', '4', 'U') == ddpf.fourCC) return DXGI_FORMAT_BC4_UNORM;
+        if (MAKEFOURCC('B', 'C', '4', 'S') == ddpf.fourCC) return DXGI_FORMAT_BC4_SNORM;
+
+        if (MAKEFOURCC('A', 'T', 'I', '2') == ddpf.fourCC) return DXGI_FORMAT_BC5_UNORM;
+        if (MAKEFOURCC('B', 'C', '5', 'U') == ddpf.fourCC) return DXGI_FORMAT_BC5_UNORM;
+        if (MAKEFOURCC('B', 'C', '5', 'S') == ddpf.fourCC) return DXGI_FORMAT_BC5_SNORM;
+"""
+
 legacyMapping = {
     DXT1: "BC1UNORM",
     DXT2: "BC2UNORM",
@@ -234,7 +248,12 @@ legacyMapping = {
     DXT4: "BC3UNORM",
     DXT5: "BC3UNORM_SRGB",
     ATI1: "BC4UNORM",
-    ATI2: "BC5UNORM",    
+    ATI2: "BC5UNORM",
+    BC4U: "BC4UNORM",
+    BC4S: "BC4SNORM",
+    BC5U: "BC5UNORM",
+    BC5S: "BC5SNORM",
+    
     }
 
 def buildFormatString(header):

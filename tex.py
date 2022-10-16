@@ -53,7 +53,7 @@ _TEXHeader = C.Struct(
         "width" / C.Int16ul,
         "height" / C.Int16ul,
         "depth" / C.Int16ul,
-        "counts" / C.Int16ul,        
+        "counts" / C.Int16ul,
         "imageCount" / C.Computed(lambda this: this.counts&0x3FF if this.version in swizzableFormats else this.counts>>8),#C.Int8ul,#12
         "mipCount" / C.Computed(lambda this: (this.counts>>12 if this.version in swizzableFormats else this.counts&0xFF)),#C.Int8ul,#4
         "format" / C.Int32ul,
@@ -76,7 +76,7 @@ def expandBlockData(texhead,swizzle):
             start = mipsTex.mipOffset-texhead.start
             end = start + (mipsTex.compressedSize if swizzle else mipsTex.uncompressedSize)
             padding = (mipsTex.uncompressedSize - mipsTex.compressedSize) if swizzle else 0
-            if DEBUG: 
+            if DEBUG:
                 pass
                 #print("Tx2: Input Packet Count: %d | Input Length: %d"%(mipsTex.uncompressedSize/packetSize,mipsTex.uncompressedSize))
             #assert len(data) == end-start
@@ -84,12 +84,12 @@ def expandBlockData(texhead,swizzle):
             if DEBUG: print("Tx2: %X %X"%(start,end))
         texs.append(mips)
     return texs
-    
+
 def trim(data,blockSize):
     bx,by = blockSize
     targetSize,currentSize,texture,packetTexelSize = data
     tx,ty = packetTexelSize
-    
+
     finalx,finaly = targetSize
     currentx,currenty = currentSize
     if currentx == finalx and currenty == finaly:
@@ -100,7 +100,7 @@ def trim(data,blockSize):
     bppX = (bx * packetSize)//tx
     offset = lambda x,y: y * currentBlocksX * bppX + x * bppX
     result = b''.join((texture[offset(0,y):offset(targetBlocksX,y)] for y in range(targetBlocksY)))
-    #print("_____")  
+    #print("_____")
     return result
 
 def BCtoDDS(filename,texhead,blockSize,datablocks):
@@ -120,13 +120,13 @@ def BCtoDDS(filename,texhead,blockSize,datablocks):
         outf.write(result)
     return output
 
-def toR8G8B8_UNORM(pixelData):    
+def toR8G8B8_UNORM(pixelData):
     return b''.join(map(lambda row: b''.join(map(bytes,row)),pixelData))
 
 def ASTCtoDDS(filename,texhead,blockSize,data,f):
     bindata = b""
     for tex in data:
-        for targetSize,currentSize,texture,packetTexelSize in tex:        
+        for targetSize,currentSize,texture,packetTexelSize in tex:
             rgba = astcToPureRGBA(texture, *currentSize, *blockSize, "Srgb" in f)
             binImg = toR8G8B8_UNORM([[column for column in row[:targetSize[0]]] for row in rgba[:targetSize[1]]])
             bindata += binImg
@@ -143,7 +143,7 @@ def exportBlocks(filename,texhead,blockSize,t,f,data):
     if "ASTC" in t:
         f = ASTCtoDDS(rfilename,texhead,blockSize,data,f)
     elif "BC" in t:
-        f = BCtoDDS(rfilename,texhead,blockSize,data)         
+        f = BCtoDDS(rfilename,texhead,blockSize,data)
     else:
         f = BCtoDDS(rfilename,texhead,blockSize,data)
     outname = f
@@ -164,7 +164,7 @@ def mergeStreaming(streamingFile):
         raise ValueError("Cannot decode Streaming texture without headers on chunk.")
 
 def convertFromTex(filename):
-    if "streaming" not in str(filename):        
+    if True:#"streaming" not in str(filename):
         filename = Path(filename)
         if not filename.exists():
             filename = filename.with_suffix(".tex.28")
@@ -189,12 +189,12 @@ def _convertFromTex(header,filename):
     size = width,height
     packetTexelSize = (bx,by)
     if header.swizzleControl == 1:
-        swizzleSize = (header.swizzleData.swizzleWidth,header.swizzleData.swizzleHeight)        
+        swizzleSize = (header.swizzleData.swizzleWidth,header.swizzleData.swizzleHeight)
         plainBlocks = [[deswizzle(block,size,packetTexelSize,swizzleSize,mip) for mip,block in enumerate(image)] for tix,image in enumerate(datablocks)]
     else:
         plainBlocks = datablocks
     return exportBlocks(filename,header,(blockSizeX,blockSizeY),typing,formatting,plainBlocks)
-        
+
 convert = convertFromTex
 
 def convertToTex(filename,outf = None,salt = 0x1c):
@@ -205,7 +205,7 @@ def convertToTex(filename,outf = None,salt = 0x1c):
         binaryFile = TEXHeader.build(texHeader)
         tex.write(binaryFile)
     return outf
-
+"""
 if __name__ in "__main__":
     def analyzeMipSize():
         mipsw = {}
@@ -229,14 +229,14 @@ if __name__ in "__main__":
             print("RT: "+str("%d x %d:"%(x,y)))
             for sx,sy in mipsw[(x,y)]:
                 print("RT: "+str("    %d x %d: %s"%(sx,sy,', '.join(mipsw[(x,y)][(sx,sy)]))))
-    
+
     def testTiming():
         import time
         sub = 0
         k = 0
         start_time = time.time()
         #testCases = Path(r"E:\MHR\GameFiles\RETool\re_chunk_000").rglob("*.tex")
-        
+
         for p in testCases:
             astc_time  = time.time()
             header = TEXHeader.parse_file(p)
@@ -251,13 +251,13 @@ if __name__ in "__main__":
         print("RT: "+str("%s seconds for %d non astc textures at %s sec/tex" % (elapsed-sub,len(testCases)-k,
                                                             (elapsed-sub)/(len(testCases)-k))))
         print("RT: "+str("%s seconds for %d astc textures at %s sec/tex" % (sub,k,sub/k)))
-    
-   
+
+
     def runTests():
-        #testCases = [ r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\TexTests\m03_ki48_ALP.tex",
-        #             r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\NullMSK1.tex",
-        #             r"C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper\test\eyelash_ALP.tex"
-        #             ]
+        testCases = [ r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\boss_icon_mini_IAM.tex",
+                     r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\npc001_00_body_ALBD.tex",
+                     r"D:\Games SSD\MHR\MHR_Tex_Chopper\tests\S_Swd050_ALBD.tex",
+                    ]
         for p in testCases:
             header = TEXHeader.parse_file(p)
             if header.imageCount == 1 and header.depth == 1:
@@ -275,7 +275,7 @@ if __name__ in "__main__":
                     convertFromTex(w)
                     print()
                     print("==================================")
-    
+
     def irregularTests():
         REVerse = ['E:/MHR/MHR_Tex_Chopper/tests/T_Pl_Leon_00_Items_ALBM.tex.30']
         DMC5 = ['E:/MHR/MHR_Tex_Chopper/tests/wp00_000_albm.tex.11']
@@ -295,7 +295,7 @@ if __name__ in "__main__":
     import traceback
     #convert(r"E:\MHR\GameFiles\RETool\re_chunk_000\natives\NSW\enemy\em001\00\mod\em001_00_ALBD.tex.28")
     #analyzeMipSize()
-    testTiming()
+    #testTiming()
     #irregularTests()
     #runTests()
         #try:
@@ -303,3 +303,4 @@ if __name__ in "__main__":
         #except Exception as e:
         #    traceback.print_tb(e.__traceback__)
         #    pass
+"""

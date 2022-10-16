@@ -30,7 +30,7 @@ with open("mainBase.py","r",encoding="utf-8") as mainCode:
     code = mainCode.read()
 
 batEntry = "PyInstaller %s"
-batcode = r"""cd /d C:\Users\Asterisk\Documents\GitHub\MHR_Tex_Chopper
+batcode = r"""cd /d D:\Games SSD\MHR\MHR_Tex_Chopper
 .\Scripts\activate
 PyInstaller main.spec
 """
