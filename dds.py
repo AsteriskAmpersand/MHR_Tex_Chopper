@@ -203,7 +203,7 @@ ddsBpps = {
     "IA44": 44,                      "P8": 8,                     "A8P8": 16,
     "B4G4R4A4_UNorm": 16,            "P208": 8,                   "V208": 8,
     "V408": 8,
-    **{typing: (8*16)//getBCBPP(typing) for typing in ddsTypeEnum if "BC" in typing}
+    **{typing: (8*getBCBPP(typing))//16 for typing in ddsTypeEnum if "BC" in typing}
 }
 ddsBpps = {key.upper().replace("_", ""): val for key, val in ddsBpps.items()}
 
@@ -383,7 +383,7 @@ class TextureData():
                         size, self.packetTexelSize, swizzleSizes)
                     swizzled = cm.swizzle(mipData)
                     #swizzled = swizzle(paddedMip, superBlockSize, self.texelSize, self.mTexelSize, self.size, mip)
-                    uncompressedSize = len(swizzled)
+                    uncompressedSize = len(swizzled)# if packetTexelSize ==
                     compressedSw = trim(swizzled)
                     compressedSize = len(compressedSw)
                     mips.append(compressedSw)
@@ -394,9 +394,13 @@ class TextureData():
                     }
                     base += compressedSize
                 else:
+                    print(self.formatName)
+                    correction = 1 + 1 *("BC1" in self.formatName or "BC4" in self.formatName)
                     uncompressedSize = len(mipData)
                     tx, ty = texelCount
-                    scanlineSize = tx*packetSize
+                    mpacketSize = ruD(packetSize, round(
+                        product(dotDivide(self.texelSize, self.mTexelSize))))
+                    scanlineSize = tx*mpacketSize
                     mips.append(mipData)
                     header = {
                         "mipOffset": base,
