@@ -32,7 +32,7 @@ with open("mainBase.py","r",encoding="utf-8") as mainCode:
 batEntry = "PyInstaller %s"
 batcode = r"""cd /d D:\Games SSD\MHR\MHR_Tex_Chopper
 .\Scripts\activate
-PyInstaller main.spec
+python -m PyInstaller main.spec
 """
 for game,salt in gameMapping.items():        
     specFileName = specFileTarget%game
@@ -43,7 +43,7 @@ for game,salt in gameMapping.items():
         outf.write(newCode)
     with open(specFileName,"w",encoding="utf-8") as outf:
         outf.write(newSpec)
-    batcode += "PyInstaller %s\n"%specFileName
+    batcode += "python -m PyInstaller %s\n"%specFileName
 
 with open("List_Compiler.bat","w",encoding="utf-8") as outf:
     outf.write(batcode)

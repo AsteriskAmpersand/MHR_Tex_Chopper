@@ -12,7 +12,7 @@ import io
 
 from formatEnum import reverseFormatEnum,formatTexelParse,formatParse, swizzableFormats,swizzledFormats
 from dds import ddsFromTexData,ddsMHRTypeEnum,getBCBPP
-from astc import astcToPureRGBA
+#from astc import astcToPureRGBA
 from dds import texHeaderFromDDSFile
 from streaming import convertStreaming
 #from tex_math import (ruD,ulog2,bitCount,linearize,dotDivide,hypersize,#deswizzle,
@@ -127,7 +127,9 @@ def ASTCtoDDS(filename,texhead,blockSize,data,f):
     bindata = b""
     for tex in data:
         for targetSize,currentSize,texture,packetTexelSize in tex:
-            rgba = astcToPureRGBA(texture, *currentSize, *blockSize, "Srgb" in f)
+            raise ValueError("ASTC is not supported, use a better image format like DDS")
+            #rgba = astcToPureRGBA(texture, *currentSize, *blockSize, "Srgb" in f)
+            rgba = None
             binImg = toR8G8B8_UNORM([[column for column in row[:targetSize[0]]] for row in rgba[:targetSize[1]]])
             bindata += binImg
     output = Path('.'.join(str(filename).split(".")[:2])).with_suffix(".dds")
