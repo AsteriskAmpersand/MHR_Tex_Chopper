@@ -2,7 +2,7 @@
 
 # Monster Hunter Rise Tex Chopper  
 
-A Python library and application for converting from MH Rise textures and other RE-Engine formats to DDS and back.
+A Python library and application for converting from MH Rise textures and other RE-Engine formats to DDS and back. [The MH Wilds version of this library is here.](https://raw.githubusercontent.com/AsteriskAmpersand/MHWs_Tex_Chopper/refs/heads/main/MH_Tex_Chop.fw.png)
 
 ## Credit
 #### Silvris
