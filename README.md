@@ -1,4 +1,4 @@
-<img src="https://cdn.discordapp.com/attachments/606154391405199380/828385308672393216/GossHaragIconFull.fw.png" width="150"> 
+<img src="https://raw.githubusercontent.com/AsteriskAmpersand/MHR_Tex_Chopper/refs/heads/main/GossHaragIconFull.fw.png" width="150"> 
 
 # Monster Hunter Rise Tex Chopper  
 
